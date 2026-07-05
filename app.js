@@ -4044,6 +4044,7 @@ document.querySelector("#messageForm")?.addEventListener("submit", (event) => {
   saveState();
   event.currentTarget.reset();
   renderAll();
+  showAppToast("Comunicado publicado no app do membro.", "success");
 });
 
 document.querySelector("#appSiteForm")?.addEventListener("submit", (event) => {
@@ -4051,6 +4052,7 @@ document.querySelector("#appSiteForm")?.addEventListener("submit", (event) => {
   if (!canManage("mobile")) return;
   mergeSettings(formData(event.currentTarget));
   renderAll();
+  showAppToast("Configuracoes do app publicadas.", "success");
 });
 
 document.querySelector("#clearAppSiteButton")?.addEventListener("click", () => {
@@ -4066,6 +4068,7 @@ document.querySelector("#clearAppSiteButton")?.addEventListener("click", () => {
     publicContact: ""
   });
   renderAll();
+  showAppToast("Conteudo do app limpo.", "success");
 });
 
 document.querySelector("#financeForm")?.addEventListener("submit", (event) => {
