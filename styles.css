@@ -4811,6 +4811,13 @@ body.is-member-app .member-live-header strong {
   font-weight: 700;
 }
 
+body.is-member-app .member-live-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 body.is-member-app .member-live-main {
   width: min(100%, 1180px);
   display: grid;
@@ -5287,6 +5294,14 @@ body.is-member-app .member-menu-button {
 
 body.is-member-app .member-menu-button span {
   font-size: 13px;
+}
+
+body.is-member-app .member-logout-button {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+body.is-member-app .member-logout-button:hover {
+  background: rgba(255, 255, 255, 0.18);
 }
 
 @media (max-width: 640px) {

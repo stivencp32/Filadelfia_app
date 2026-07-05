@@ -1335,6 +1335,19 @@ function saveMemberSession(session) {
   localStorage.setItem(MEMBER_SESSION_KEY, JSON.stringify(session));
 }
 
+function clearMemberSession() {
+  localStorage.removeItem(MEMBER_SESSION_KEY);
+}
+
+async function signOutEverywhere() {
+  if (supabaseConfigured()) await supabaseClient().auth.signOut();
+  state.session = null;
+  clearMemberSession();
+  saveState();
+  showAuth();
+  showAppToast("Sessao encerrada.", "success");
+}
+
 function memberPasswordCacheKey(email) {
   return `filadelfia_member_password:${String(email || "").trim().toLowerCase()}`;
 }
@@ -1403,7 +1416,10 @@ function ensureLiveMemberAppLayout() {
     <div class="member-live-app">
       <header class="member-live-header">
         <strong data-church-short-name>Filad\u00e9lfia</strong>
-        <button class="member-menu-button" id="memberAdminButton" type="button" hidden><i data-lucide="layout-dashboard"></i><span>Gest\u00e3o</span></button>
+        <div class="member-live-header-actions">
+          <button class="member-menu-button" id="memberAdminButton" type="button" hidden><i data-lucide="layout-dashboard"></i><span>Gest\u00e3o</span></button>
+          <button class="member-menu-button member-logout-button" id="memberLogoutButton" type="button"><i data-lucide="log-out"></i><span>Sair</span></button>
+        </div>
       </header>
       <main class="member-live-main">
         <section class="member-live-hero-panel">
@@ -4268,6 +4284,7 @@ document.addEventListener("click", (event) => {
   if (event.target.closest("#openPublicLinkButton")) location.href = publicJoinLink();
   if (event.target.closest("#openMemberAppButton")) showMemberApp({ type: "admin", userId: currentUser()?.id, signedAt: new Date().toISOString() });
   if (event.target.closest("#memberAdminButton") && currentUser()) showAdmin();
+  if (event.target.closest("#memberLogoutButton")) signOutEverywhere();
   if (event.target.closest("#memberBibleButton, #memberBibleNavButton") && state.settings.bibleLink) window.open(state.settings.bibleLink, "_blank", "noopener");
   if (event.target.closest("#printMemberCardButton")) window.print();
 
@@ -4537,10 +4554,7 @@ document.querySelector("#fullscreenButton")?.addEventListener("click", () => {
 });
 
 document.querySelector("#logoutButton")?.addEventListener("click", async () => {
-  if (supabaseConfigured()) await supabaseClient().auth.signOut();
-  state.session = null;
-  saveState();
-  showAuth();
+  await signOutEverywhere();
 });
 
 document.querySelector("#resetDemoButton")?.addEventListener("click", () => {
