@@ -1,0 +1,10 @@
+filadelfia_state.json
+supabase.config.js
+.env
+.env.local
+cloudflared-tunnel.*.log
+__pycache__/
+*.pyc
+TESTING_NOTES.md
+UX_REFACTOR_MEMORY.md
+supabase/create-master-stiven.sql

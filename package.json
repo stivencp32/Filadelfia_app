@@ -1,0 +1,13 @@
+{
+  "name": "filadelfia_app",
+  "version": "1.0.0",
+  "description": "Protótipo web estático inspirado na demonstração em vídeo e adaptado para a identidade visual da Assembleia de Deus Ministério Filadélfia.",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}

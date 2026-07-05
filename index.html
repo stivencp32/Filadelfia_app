@@ -1,0 +1,919 @@
+﻿<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Admin Igreja</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="./styles.css?v=20260704-ux-pass-1" />
+    <script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script defer src="./app-config.js?v=20260630-26"></script>
+    <script defer src="./supabase.config.js?v=20260630-27"></script>
+    <script defer src="./app.js?v=20260704-ux-pass-1"></script>
+  </head>
+  <body class="is-auth-screen">
+    <div class="app-toast" id="appToast" role="status" aria-live="polite" hidden></div>
+    <section class="member-app-screen" id="memberApp" hidden>
+      <div class="member-phone-shell">
+        <div class="phone member-phone">
+          <div class="phone-screen">
+            <header>
+              <strong data-church-short-name>Filadélfia</strong>
+              <button class="member-menu-button" id="memberAdminButton" type="button" hidden><i data-lucide="layout-dashboard"></i></button>
+            </header>
+            <div class="member-greeting">
+              <span id="memberWelcomeName">Bem-vindo</span>
+              <small>Seu acesso de membro está ativo.</small>
+            </div>
+            <label class="app-search"><i data-lucide="search"></i><input id="memberAppSearch" value="Assembleia" readonly /></label>
+            <div class="app-hero app-hero-empty">
+              <img id="memberPhoneLogoImage" alt="" hidden />
+              <div class="member-phone-logo-fallback brand-mark"><span>F</span></div>
+              <span id="memberPhoneHeroTitle">Bem-vindo</span>
+              <small id="memberPhoneHeroSubtitle"></small>
+            </div>
+            <div class="shortcut-row">
+              <button type="button"><i data-lucide="calendar"></i><span>Agenda</span></button>
+              <button type="button" id="memberBibleButton"><i data-lucide="book-open"></i><span>Bíblia</span></button>
+              <button type="button"><i data-lucide="hand-heart"></i><span>Ofertas</span></button>
+              <button type="button"><i data-lucide="qr-code"></i><span>Carteirinha</span></button>
+            </div>
+            <div class="member-card" id="memberCard">
+              <span>Carteirinha</span>
+              <strong id="memberCardName">Membro</strong>
+              <small id="memberCardMeta">Cadastro ativo</small>
+            </div>
+            <div class="phone-banner" id="memberPhoneBanner" hidden></div>
+            <div class="app-section-title"><strong>Conteúdos</strong><span id="memberPhoneContentCount">0 itens</span></div>
+            <div class="phone-content-list" id="memberPhoneContentList"></div>
+            <nav class="app-bottom">
+              <button type="button"><i data-lucide="calendar"></i><span>Agenda</span></button>
+              <button type="button" id="memberBibleNavButton"><i data-lucide="book-open"></i><span>Bíblia</span></button>
+              <button type="button"><i data-lucide="circle-dollar-sign"></i><span>Ofertas</span></button>
+              <button type="button"><i data-lucide="qr-code"></i><span>Carteirinha</span></button>
+            </nav>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="public-screen" id="publicScreen" hidden>
+      <div class="public-card">
+        <div class="auth-brand public-brand">
+          <div class="brand-mark auth-logo" aria-hidden="true"><span>F</span></div>
+          <div>
+            <strong data-church-name>Ministério Filadélfia</strong>
+            <small>Cadastro de membros e visitantes</small>
+          </div>
+        </div>
+        <form id="publicMemberForm" class="auth-form is-visible public-member-form">
+          <h1>Criar acesso ao app</h1>
+          <div class="form-grid">
+            <label>Nome completo<input name="name" required /></label>
+            <label>Sexo<select name="gender"><option value="">Não informado</option><option>Feminino</option><option>Masculino</option></select></label>
+            <label>Data de nascimento<input name="birthDate" type="date" /></label>
+            <label>Telefone<input name="phone" placeholder="(00) 00000-0000" /></label>
+            <label>E-mail<input name="email" type="email" /></label>
+            <label>Senha<input name="password" type="password" autocomplete="new-password" minlength="6" required /></label>
+            <label>Foto<input name="photoFile" type="file" accept="image/*" /></label>
+            <label>Igreja<select name="churchId" id="publicChurchSelect"></select></label>
+            <label>Arrolamento<select name="status"><option>Visitante</option><option>Membro</option><option>Congregado</option></select></label>
+            <label>Data de entrada<input name="entryDate" type="date" /></label>
+            <label class="span-2">Observações<textarea name="notes" rows="4" placeholder="Pedido de contato, ministério, congregação ou outra informação importante"></textarea></label>
+          </div>
+          <button class="save" type="submit"><i data-lucide="send"></i> Enviar cadastro</button>
+          <p class="form-note" id="publicFormStatus"></p>
+        </form>
+      </div>
+    </section>
+
+    <section class="auth-screen" id="authScreen" aria-label="Acesso administrativo">
+      <div class="auth-brand">
+        <div class="brand-mark auth-logo" aria-hidden="true"><span>F</span></div>
+        <div>
+          <strong id="authChurchName">Ministério Filadélfia</strong>
+          <small>Administração da igreja</small>
+        </div>
+      </div>
+
+      <div class="auth-card">
+        <div class="auth-tabs" role="tablist" hidden>
+          <button class="is-selected" data-auth-tab="login" type="button">Login</button>
+          <button data-auth-tab="register" type="button">Cadastro</button>
+        </div>
+
+        <form class="auth-form is-visible" id="loginForm">
+          <h1>Entrar</h1>
+          <label>E-mail ou matrícula<input name="email" autocomplete="username" required /></label>
+          <label>Senha<input type="password" name="password" autocomplete="current-password" required /></label>
+          <button class="save" type="submit"><i data-lucide="log-in"></i> Entrar</button>
+          <button class="link-button" id="showPasswordResetButton" type="button">Esqueci minha senha</button>
+          <p class="form-note">O acesso é liberado pela igreja por convite. Visitantes e membros usam o link público do app.</p>
+        </form>
+
+        <form class="auth-form" id="passwordResetForm">
+          <h1>Redefinir senha</h1>
+          <p class="form-note">Informe o e-mail cadastrado no app do membro. Por enquanto a alteração é feita sem envio de link.</p>
+          <label>E-mail<input type="email" name="email" autocomplete="email" required /></label>
+          <label>Nova senha<input type="password" name="password" autocomplete="new-password" minlength="6" required /></label>
+          <label>Confirmar senha<input type="password" name="confirmPassword" autocomplete="new-password" minlength="6" required /></label>
+          <span class="save-status" id="passwordResetStatus" role="status"></span>
+          <button class="save" type="submit"><i data-lucide="key-round"></i> Alterar senha</button>
+          <button class="link-button" id="backToLoginButton" type="button">Voltar ao login</button>
+        </form>
+
+        <form class="auth-form" id="registerForm" hidden>
+          <h1>Criar administrador</h1>
+          <label>Nome do administrador<input name="adminName" autocomplete="name" required /></label>
+          <label>E-mail<input type="email" name="email" autocomplete="email" required /></label>
+          <label>Cargo / função principal<input name="positionTitle" placeholder="Ex: Lider de louvor, Tesoureiro, Pastor auxiliar" /></label>
+          <label>Departamento<select name="department" id="bootstrapDepartmentSelect"></select></label>
+          <label>Função<select name="ministryRole" id="bootstrapFunctionSelect"></select></label>
+          <label>Detalhes da função<textarea name="roleDetails" rows="4" placeholder="Responsabilidades, escala, área de atuação ou observações"></textarea></label>
+          <label>Senha<input type="password" name="password" autocomplete="new-password" minlength="6" required /></label>
+          <label>Nome da igreja<input name="churchName" value="Assembleia de Deus Ministério Filadélfia" required /></label>
+          <button class="save" type="submit"><i data-lucide="user-plus"></i> Criar conta</button>
+        </form>
+
+        <form class="auth-form" id="inviteAcceptForm">
+          <h1>Ativar convite</h1>
+          <p class="form-note" id="inviteContext">Complete os dados para ativar seu acesso.</p>
+          <label>Nome<input name="name" autocomplete="name" required /></label>
+          <label>E-mail<input type="email" name="email" autocomplete="email" required /></label>
+          <label>Cargo / função principal<input name="positionTitle" placeholder="Ex: Lider de louvor, Tesoureiro, Pastor auxiliar" /></label>
+          <label>Departamento<select name="department" id="inviteDepartmentSelect"></select></label>
+          <label>Função<select name="ministryRole" id="inviteFunctionSelect"></select></label>
+          <label>Detalhes da função<textarea name="roleDetails" rows="4" placeholder="Responsabilidades, escala, área de atuação ou observações"></textarea></label>
+          <label>Senha<input type="password" name="password" autocomplete="new-password" minlength="6" required /></label>
+          <button class="save" type="submit"><i data-lucide="user-check"></i> Ativar acesso</button>
+        </form>
+      </div>
+    </section>
+
+    <div class="app-shell" id="adminApp" hidden>
+      <aside class="sidebar" aria-label="Menu principal">
+        <div class="brand">
+          <div class="brand-logo-wrap">
+            <img id="sidebarLogo" class="uploaded-logo" alt="" hidden />
+            <div class="brand-mark" id="fallbackLogo" aria-hidden="true"><span>F</span></div>
+          </div>
+          <div>
+            <strong data-church-short-name>Filadélfia</strong>
+            <small id="churchSubtitle">A Noiva</small>
+          </div>
+          <button class="sidebar-close" id="sidebarCloseButton" type="button" aria-label="Fechar menu"><i data-lucide="x"></i></button>
+        </div>
+
+        <label class="search">
+          <i data-lucide="search"></i>
+          <input type="search" id="globalSearch" placeholder="Pesquisar..." />
+        </label>
+
+        <nav class="main-nav">
+          <button class="nav-item is-active" data-view="home"><i data-lucide="layout-dashboard"></i> Início</button>
+          <button class="nav-item" data-view="access" data-permission="access"><i data-lucide="shield-check"></i> Acessos</button>
+          <button class="nav-item" data-view="members"><i data-lucide="users"></i> Membresia</button>
+          <button class="nav-item" data-view="pastoral"><i data-lucide="heart-handshake"></i> Área Pastoral</button>
+          <button class="nav-item" data-view="churches"><i data-lucide="church"></i> Igrejas</button>
+          <button class="nav-item" data-view="groups"><i data-lucide="users-round"></i> Pequenos Grupos</button>
+          <button class="nav-item" data-view="ministries"><i data-lucide="grid-3x3"></i> Ministérios</button>
+          <button class="nav-item" data-view="events"><i data-lucide="calendar-days"></i> Eventos</button>
+          <button class="nav-item" data-view="kids"><i data-lucide="baby"></i> Kids</button>
+          <button class="nav-item" data-view="finance"><i data-lucide="badge-dollar-sign"></i> Financeiro</button>
+          <button class="nav-item" data-view="library"><i data-lucide="library"></i> Biblioteca</button>
+          <button class="nav-item" data-view="messages"><i data-lucide="messages-square"></i> Comunicados</button>
+          <button class="nav-item" data-view="mobile"><i data-lucide="smartphone"></i> App / Site</button>
+          <button class="nav-item" data-view="settings"><i data-lucide="settings"></i> Configurações</button>
+        </nav>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <button class="icon-button" id="menuToggle" aria-label="Alternar menu"><i data-lucide="menu"></i></button>
+          <div class="topbar-title">
+            <i data-lucide="home"></i>
+            <span data-church-name>ASSEMBLEIA DE DEUS FILADÉLFIA</span>
+          </div>
+          <div class="topbar-actions">
+            <button class="icon-button" data-view-jump="settings" aria-label="Usuário"><i data-lucide="user-round"></i></button>
+            <button class="icon-button" id="fullscreenButton" aria-label="Tela cheia"><i data-lucide="maximize"></i></button>
+            <button class="context-switch-button" id="openMemberAppButton" type="button" aria-label="Abrir app do membro"><i data-lucide="smartphone"></i><span>App do membro</span></button>
+            <button class="notification" data-view-jump="messages" aria-label="Notificações"><i data-lucide="bell"></i><span id="notificationCount">0</span></button>
+            <button class="icon-button" id="logoutButton" aria-label="Sair"><i data-lucide="log-out"></i></button>
+          </div>
+        </header>
+
+        <section class="mobile-tabs" aria-label="Atalhos">
+          <button class="tab-link is-active" data-view="home">Início</button>
+          <button class="tab-link" data-view="access" data-permission="access">Acessos</button>
+          <button class="tab-link" data-view="members">Membros</button>
+          <button class="tab-link" data-view="events">Eventos</button>
+          <button class="tab-link" data-view="finance">Financeiro</button>
+          <button class="tab-link" data-view="mobile">App</button>
+        </section>
+
+        <div class="content">
+          <section class="view is-visible" id="home">
+            <div class="welcome-panel">
+              <div>
+                <span>Administração</span>
+                <h1 data-church-name>Assembleia de Deus Ministério Filadélfia</h1>
+                <p>Configure sua igreja, cadastre dados reais e publique a experiência do app quando estiver tudo pronto.</p>
+              </div>
+              <button class="pill-button" data-view-jump="settings"><i data-lucide="settings"></i> Configurar igreja</button>
+            </div>
+
+            <div class="dashboard-grid">
+              <div class="metric-card"><strong data-count="members">0</strong><span>Membros cadastrados</span><small>Comece pela membresia</small></div>
+              <div class="metric-card"><strong data-count="events">0</strong><span>Eventos ativos</span><small>Nenhum evento criado</small></div>
+              <div class="metric-card"><strong data-count="messages">0</strong><span>Comunicados</span><small>Nenhuma publicação</small></div>
+            </div>
+
+            <div class="section-heading">
+              <h2><i data-lucide="clipboard-list"></i> Próximos passos</h2>
+            </div>
+            <div class="setup-grid">
+              <article>
+                <i data-lucide="image-up"></i>
+                <strong>Logo e identidade</strong>
+                <span>Envie a logo da igreja e escolha a paleta do admin e do app.</span>
+                <button data-view-jump="settings">Abrir</button>
+              </article>
+              <article>
+                <i data-lucide="users"></i>
+                <strong>Membresia</strong>
+                <span>Cadastre membros, visitantes, responsáveis e dados pastorais.</span>
+                <button data-view-jump="members">Abrir</button>
+              </article>
+              <article>
+                <i data-lucide="smartphone"></i>
+                <strong>App / Site</strong>
+                <span>Configure banners, atalhos e conteúdos públicos.</span>
+                <button data-view-jump="mobile">Abrir</button>
+              </article>
+            </div>
+          </section>
+
+          <section class="view" id="access">
+            <div class="page-title">
+              <span>Admin - Usuários e permissões</span>
+              <button class="help-button" id="copyPublicLinkButton" type="button"><i data-lucide="copy"></i> Copiar link público</button>
+            </div>
+
+            <div class="access-layout">
+              <form class="panel" id="inviteForm">
+                <h2>Criar convite administrativo</h2>
+                <div class="form-grid">
+                  <label>Nome do convidado<input name="name" placeholder="Ex: Líder do louvor" required /></label>
+                  <label>E-mail<input name="email" type="email" placeholder="email@dominio.com" required /></label>
+                  <label>Cargo sugerido
+                    <select name="role" id="roleTemplate">
+                      <option value="custom">Personalizado</option>
+                      <option value="master">Administrador master</option>
+                      <option value="pastor_presidente">Pastor Presidente</option>
+                      <option value="pastor_vice_presidente">Pastor Vice Presidente</option>
+                      <option value="pastor_auxiliar">Pastor Auxiliar</option>
+                      <option value="worship">Líder de louvor</option>
+                      <option value="media">Equipe de mídia</option>
+                      <option value="events">Eventos</option>
+                      <option value="kids">Kids</option>
+                      <option value="treasury">Tesouraria</option>
+                    </select>
+                  </label>
+                </div>
+                <h3>Permissões</h3>
+                <div class="permission-grid" id="invitePermissions"></div>
+                <button class="save" type="submit"><i data-lucide="link"></i> Gerar link de convite</button>
+              </form>
+
+              <aside class="panel public-link-panel">
+                <h2>Link para membros e visitantes</h2>
+                <p class="lead">Use este link ou QR Code para novos membros e visitantes enviarem cadastro para a igreja.</p>
+                <input id="publicJoinLink" readonly />
+                <canvas id="publicJoinQr" width="180" height="180" aria-label="QR Code do cadastro público"></canvas>
+                <button class="outline" id="openPublicLinkButton" type="button"><i data-lucide="external-link"></i> Abrir formulário</button>
+              </aside>
+            </div>
+
+            <div class="two-columns access-tables">
+              <div class="panel">
+                <h2>Usuários do admin</h2>
+                <div class="table-wrap users-table-wrap">
+                  <table>
+                    <thead><tr><th>Nome</th><th>Cargo</th><th>Status</th><th>Ações</th></tr></thead>
+                    <tbody id="usersTable"></tbody>
+                  </table>
+                </div>
+                <div class="pagination compact-pagination" id="usersPagination" hidden></div>
+              </div>
+              <div class="panel invites-panel">
+                <h2>Convites gerados</h2>
+                <div class="empty-state compact-empty" id="invitesEmpty">
+                  <i data-lucide="mail-plus"></i>
+                  <strong>Nenhum convite criado</strong>
+                </div>
+                <div class="list invite-list" id="invitesList"></div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <h2>Matriz de módulos</h2>
+              <div class="module-matrix" id="moduleMatrix"></div>
+            </div>
+          </section>
+
+          <section class="view" id="members">
+            <div class="page-title">
+              <span>Membresia</span>
+              <button class="help-button"><i data-lucide="circle-help"></i> Ajuda</button>
+            </div>
+            <div class="permission-notice" id="membersReadOnlyNotice" hidden>
+              <i data-lucide="eye"></i>
+              Você pode visualizar a listagem de membros. Para cadastrar, editar, remover ou ver detalhes, solicite permissão ao administrador master.
+            </div>
+            <div class="member-summary-grid" id="memberSummaryGrid" hidden>
+              <button class="summary-card" type="button" data-member-filter="all"><strong id="memberTotalCount">0</strong><span>Total cadastrado</span></button>
+              <button class="summary-card" type="button" data-member-filter="new-month"><strong id="memberNewMonthCount">0</strong><span>Entraram neste mês</span></button>
+              <button class="summary-card" type="button" data-member-filter="female"><strong id="memberFemaleCount">0</strong><span>Mulheres</span></button>
+              <button class="summary-card" type="button" data-member-filter="male"><strong id="memberMaleCount">0</strong><span>Homens</span></button>
+            </div>
+            <div class="age-summary" id="memberAgeSummary" hidden>
+              <button type="button" data-member-filter="age-child"><strong id="ageChildCount">0</strong><span>Até 12 anos</span></button>
+              <button type="button" data-member-filter="age-teen"><strong id="ageTeenCount">0</strong><span>13 a 17 anos</span></button>
+              <button type="button" data-member-filter="age-adult"><strong id="ageAdultCount">0</strong><span>18 a 59 anos</span></button>
+              <button type="button" data-member-filter="age-senior"><strong id="ageSeniorCount">0</strong><span>60+ anos</span></button>
+            </div>
+            <div class="member-chart-panel" id="memberChartPanel" hidden>
+              <button type="button" data-member-filter="new-visitors"><strong id="newVisitorsCount">0</strong><span>Novos visitantes</span></button>
+              <button type="button" data-member-filter="member"><strong id="activeMembersCount">0</strong><span>Membros</span></button>
+              <button type="button" data-member-filter="congregado"><strong id="congregadosCount">0</strong><span>Congregados</span></button>
+            </div>
+            <div class="panel">
+              <div class="panel-title-row">
+                <h2>Membros cadastrados</h2>
+                <button class="icon-fab" id="openMemberFormButton" type="button" title="Cadastrar membro" aria-label="Cadastrar membro" hidden><i data-lucide="user-plus"></i></button>
+              </div>
+              <div class="list-filter-status" id="memberFilterStatus">Exibindo todos</div>
+              <div class="empty-state" id="membersEmpty">
+                <i data-lucide="users"></i>
+                <strong>Nenhum membro cadastrado ainda</strong>
+                <span>Os registros salvos aparecerão aqui para consulta.</span>
+              </div>
+              <div class="table-wrap" id="membersTableWrap" hidden>
+                <table>
+                  <thead><tr><th>Nome</th><th>Celular</th><th>Arrolamento</th><th>Entrada</th><th id="memberActionsHead">Ações</th></tr></thead>
+                  <tbody id="membersTable"></tbody>
+                </table>
+              </div>
+              <div class="pagination compact-pagination" id="membersPagination" hidden></div>
+            </div>
+            <div class="panel member-detail-panel" id="memberDetailPanel" hidden>
+              <h2>Detalhes do cadastro</h2>
+              <div id="memberDetailContent"></div>
+            </div>
+
+            <div class="modal-backdrop" id="memberModal" hidden>
+              <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="memberModalTitle">
+                <header class="modal-header">
+                  <h2 id="memberModalTitle">Cadastrar membro</h2>
+                  <button class="icon-button modal-close" id="closeMemberFormButton" type="button" aria-label="Fechar cadastro"><i data-lucide="x"></i></button>
+                </header>
+                <form class="data-form" id="memberForm">
+                  <div class="form-grid">
+                    <input type="hidden" name="id" id="memberId" />
+                    <label>Nome<input name="name" required placeholder="Nome completo" /></label>
+                    <label>Sexo<select name="gender"><option value="">Não informado</option><option>Feminino</option><option>Masculino</option></select></label>
+                    <label>Data Nascimento<input name="birthDate" type="date" /></label>
+                    <label>E-mail<input name="email" type="email" placeholder="email@dominio.com" /></label>
+                    <label>Celular<input name="phone" placeholder="(00) 00000-0000" /></label>
+                    <label>Foto<input name="photoFile" type="file" accept="image/*" /></label>
+                    <input type="hidden" name="photo" id="memberPhotoData" />
+                    <label>Matrícula<input name="registration" placeholder="Gerada automaticamente" readonly /></label>
+                    <label>Igreja<select name="churchId" id="memberChurchSelect"></select></label>
+                    <label>Departamento<select name="department" id="memberDepartmentSelect"></select></label>
+                    <label>Função<select name="ministryRole" id="memberFunctionSelect"></select></label>
+                    <label>Data de Entrada<input name="entryDate" type="date" /></label>
+                    <label class="span-2">Arrolamento<select name="status"><option>Visitante</option><option>Membro</option><option>Congregado</option></select></label>
+                    <label class="check-line"><input name="isLeader" type="checkbox" /> Liderança / responsável</label>
+                    <label class="span-3">Observações<textarea name="notes" rows="5"></textarea></label>
+                  </div>
+                  <footer class="modal-actions">
+                    <button class="save" type="submit"><i data-lucide="circle-check"></i> Salvar membro</button>
+                    <button class="outline" type="button" data-clear-form="memberForm"><i data-lucide="eraser"></i> Limpar</button>
+                  </footer>
+                </form>
+              </div>
+            </div>
+          </section>
+
+          <section class="view" id="pastoral">
+            <div class="page-title"><span>Área Pastoral</span><button class="help-button">Ajuda</button></div>
+            <div class="permission-notice" id="pastoralPrayerOnlyNotice" hidden>
+              <i data-lucide="lock-keyhole"></i>
+              Você pode enviar pedido de oração. Somente pastores e usuários autorizados pelo master visualizam solicitações de outras pessoas.
+            </div>
+            <div class="panel pastoral-action-panel">
+              <div class="panel-title-row">
+                <h2>Pedidos pastorais</h2>
+                <button class="icon-fab" id="openPrayerFormButton" type="button" title="Pedir oração" aria-label="Pedir oração"><i data-lucide="hand-heart"></i></button>
+              </div>
+              <p class="lead">Use o botão para enviar pedido de oração, visita ou acompanhamento pastoral.</p>
+              <span class="save-status" id="pastoralActionStatus" role="status"></span>
+            </div>
+            <div class="modal-backdrop" id="prayerModal" hidden>
+              <form class="panel data-form prayer-modal-panel" id="prayerRequestForm">
+                <button class="icon-button modal-close prayer-close-button" id="closePrayerFormButton" type="button" aria-label="Fechar pedido"><i data-lucide="x"></i></button>
+                <h2>Pedir oração</h2>
+                <div class="form-grid">
+                  <div class="segmented-control span-3" aria-label="Destino do pedido">
+                    <label><input type="radio" name="requestTarget" value="self" checked /> <span>Para mim</span></label>
+                    <label><input type="radio" name="requestTarget" value="other" /> <span>Para outra pessoa</span></label>
+                  </div>
+                  <label id="prayerPersonNameField">Nome da pessoa<input name="requesterName" placeholder="Nome completo" required /></label>
+                  <label>Tipo de cuidado
+                    <select name="type">
+                      <option>Oração</option>
+                      <option>Visita</option>
+                      <option>Aconselhamento</option>
+                      <option>Outros</option>
+                    </select>
+                  </label>
+                  <label>Prioridade
+                    <select name="urgency">
+                      <option>Normal</option>
+                      <option>Urgente</option>
+                    </select>
+                  </label>
+                  <label class="span-3">Pedido<textarea name="message" rows="6" placeholder="Escreva seu pedido" required></textarea></label>
+                  <label class="check-line span-3"><input name="confidential" type="checkbox" /> Compartilhar somente com a equipe pastoral autorizada</label>
+                </div>
+                <div class="form-actions">
+                  <button class="save" type="submit"><i data-lucide="send"></i> Enviar pedido</button>
+                  <span class="save-status" id="prayerRequestStatus" role="status"></span>
+                </div>
+              </form>
+
+              <aside class="panel pastoral-help-panel" hidden>
+                <h2>Cargos pastorais</h2>
+                <div class="role-note"><strong>Pastor Presidente</strong><span>Acesso master automático</span></div>
+                <div class="role-note"><strong>Pastor Vice Presidente</strong><span>Acesso master automático</span></div>
+                <div class="role-note"><strong>Pastor Auxiliar</strong><span>Acessa somente os módulos concedidos pelo master</span></div>
+              </aside>
+            </div>
+
+            <div class="pastoral-summary" id="pastoralManagePanel" hidden>
+              <button class="summary-card" type="button"><strong id="pastoralTotalCount">0</strong><span>Total de pedidos</span></button>
+              <button class="summary-card" type="button"><strong id="pastoralOpenCount">0</strong><span>Em aberto</span></button>
+              <button class="summary-card" type="button"><strong id="pastoralUrgentCount">0</strong><span>Urgentes</span></button>
+              <button class="summary-card" type="button"><strong id="pastoralResolvedCount">0</strong><span>Resolvidos</span></button>
+              <div class="panel pastoral-list-panel">
+                <h2>Solicitações recebidas</h2>
+                <div class="empty-state" id="pastoralRequestsEmpty">
+                  <i data-lucide="heart-handshake"></i>
+                  <strong>Nenhuma solicitação registrada</strong>
+                  <span>Aqui ficarão pedidos de oração, visitas e acompanhamentos pastorais.</span>
+                </div>
+                <div class="pastoral-list" id="pastoralRequestsList"></div>
+              </div>
+            </div>
+
+            <div class="panel" id="pastoralMinePanel">
+              <h2>Meus pedidos</h2>
+              <div class="empty-state compact-empty" id="pastoralMineEmpty">
+                <i data-lucide="heart"></i>
+                <strong>Nenhum pedido enviado por você</strong>
+              </div>
+              <div class="pastoral-list" id="pastoralMineList"></div>
+            </div>
+          </section>
+
+          <section class="view legacy-pastoral" hidden>
+            <div class="page-title"><span>Área Pastoral - Solicitações</span><button class="help-button">Ajuda</button></div>
+            <div class="panel">
+              <h2>Solicitações</h2>
+              <div class="empty-state">
+                <i data-lucide="heart-handshake"></i>
+                <strong>Nenhuma solicitação registrada</strong>
+                <span>Aqui ficarão pedidos de oração, visitas e acompanhamentos pastorais.</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="view" id="churches">
+            <div class="page-title"><span>Igrejas - Localização</span><button class="help-button">Ajuda</button></div>
+            <div class="permission-notice" id="churchesReadOnlyNotice" hidden>
+              <i data-lucide="eye"></i>
+              Você pode visualizar as igrejas cadastradas. Para incluir ou alterar dados, solicite permissão ao administrador master.
+            </div>
+            <div class="panel church-action-panel" id="churchEditor">
+              <div class="panel-title-row">
+                <h2>Gerenciar igrejas</h2>
+                <button class="icon-fab" id="openChurchFormButton" type="button" title="Cadastrar igreja" aria-label="Cadastrar igreja" onclick="window.openChurchFormFromButton?.(event)"><i data-lucide="church"></i></button>
+              </div>
+              <p class="lead">Use o botão para incluir uma igreja, congregação ou ponto de atendimento.</p>
+            </div>
+            <div class="modal-backdrop" id="churchModal" hidden>
+              <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="churchModalTitle">
+                <header class="modal-header">
+                  <h2 id="churchModalTitle">Cadastrar igreja</h2>
+                  <button class="icon-button modal-close" id="closeChurchFormButton" type="button" aria-label="Fechar cadastro de igreja"><i data-lucide="x"></i></button>
+                </header>
+              <form class="data-form" id="churchForm">
+                <input type="hidden" name="id" id="churchId" />
+                <div class="form-grid">
+                  <label>Nome da igreja<input name="name" required placeholder="Ex: Filadélfia - Sede" /></label>
+                  <label>Pastor responsável<input name="pastor" placeholder="Nome do pastor" /></label>
+                  <label>Telefone<input name="phone" placeholder="(00) 00000-0000" /></label>
+                  <label class="span-2">Endereço<input name="address" required placeholder="Rua, número, bairro" /></label>
+                  <label>Cidade<input name="city" required placeholder="Cidade" /></label>
+                  <label>Estado<input name="state" required placeholder="UF" maxlength="2" /></label>
+                  <label>Status<select name="status"><option>Ativa</option><option>Congregação</option><option>Em implantação</option></select></label>
+                  <label>Horário principal<input name="serviceTime" placeholder="Domingo, 19h" /></label>
+                  <label>Latitude<input name="lat" placeholder="-22.8268" /></label>
+                  <label>Longitude<input name="lng" placeholder="-43.0634" /></label>
+                </div>
+                <footer class="modal-actions">
+                  <button class="save" type="submit"><i data-lucide="circle-check"></i> Salvar igreja</button>
+                  <button class="outline" type="button" data-clear-form="churchForm"><i data-lucide="eraser"></i> Limpar</button>
+                </footer>
+              </form>
+              </div>
+            </div>
+            <div class="panel">
+              <h2>Igrejas cadastradas</h2>
+              <div class="empty-state" id="churchesEmpty">
+                <i data-lucide="church"></i>
+                <strong>Nenhuma igreja cadastrada ainda</strong>
+                <span>Quando o master ou um usuário autorizado incluir igrejas, elas aparecerão aqui.</span>
+              </div>
+              <div class="church-list" id="churchesList"></div>
+              <div class="church-map" id="churchMap" role="region" aria-label="Mapa das igrejas cadastradas"></div>
+              <p class="map-note" id="churchMapNote">Use latitude e longitude no cadastro para posicionar a igreja no mapa. Quando estiver em branco, o app tenta localizar pelo endereço.</p>
+              <div class="map-placeholder legacy-map-placeholder">
+                <i data-lucide="map-pinned"></i>
+                <strong>Mapa será conectado em uma próxima etapa</strong>
+                <span>As igrejas cadastradas serão usadas para montar a visualização no mapa.</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="view" id="groups">
+            <div class="panel">
+              <h2>Pequenos Grupos</h2>
+              <div class="empty-state"><i data-lucide="users-round"></i><strong>Nenhum pequeno grupo criado</strong><span>Vamos adicionar cadastro, líderes, encontros e presença nesta seção.</span></div>
+            </div>
+          </section>
+
+          <section class="view" id="ministries">
+            <div class="panel">
+              <h2>Ministérios</h2>
+              <div class="empty-state"><i data-lucide="grid-3x3"></i><strong>Nenhum ministério criado</strong><span>Depois entraremos com escalas, equipes e permissões por ministério.</span></div>
+            </div>
+          </section>
+
+          <section class="view" id="events">
+            <div class="page-title"><span>Eventos</span><button class="help-button">Ajuda</button></div>
+            <div class="panel">
+              <div class="panel-title-row">
+                <h2>Eventos</h2>
+                <button class="icon-fab" id="openEventFormButton" type="button" title="Cadastrar evento" aria-label="Cadastrar evento" hidden><i data-lucide="calendar-plus"></i></button>
+              </div>
+              <div class="permission-notice" id="eventsReadOnlyNotice" hidden>
+                <i data-lucide="eye"></i>
+                Você pode visualizar os eventos. Para criar, editar ou remover, solicite permissão ao administrador master.
+              </div>
+              <div class="event-summary-grid" id="eventSummaryGrid">
+                <article><strong id="eventTotalCount">0</strong><span>Total</span></article>
+                <article><strong id="eventUpcomingCount">0</strong><span>Próximos</span></article>
+                <article><strong id="eventOpenCount">0</strong><span>Inscrições abertas</span></article>
+                <article><strong id="eventMonthCount">0</strong><span>Este mês</span></article>
+              </div>
+              <div class="event-toolbar">
+                <div class="report-mode-control" aria-label="Filtro de eventos">
+                  <button class="is-selected" type="button" data-event-filter="all">Todos</button>
+                  <button type="button" data-event-filter="upcoming">Próximos</button>
+                  <button type="button" data-event-filter="open">Inscrições abertas</button>
+                  <button type="button" data-event-filter="past">Realizados</button>
+                </div>
+                <label class="event-search"><i data-lucide="search"></i><input id="eventSearchInput" type="search" placeholder="Buscar evento, local ou público..." /></label>
+              </div>
+              <div class="empty-state" id="eventsEmpty"><i data-lucide="calendar-days"></i><strong>Nenhum evento ativo</strong><span>Use o botão para cadastrar cultos especiais, conferências, congressos, retiros e ações da igreja.</span></div>
+              <div class="event-list" id="eventsList"></div>
+            </div>
+            <div class="modal-backdrop" id="eventDetailModal" hidden>
+              <div class="modal-panel event-detail-modal" role="dialog" aria-modal="true" aria-labelledby="eventDetailTitle">
+                <header class="modal-header">
+                  <h2 id="eventDetailTitle">Detalhes do evento</h2>
+                  <button class="icon-button modal-close" id="closeEventDetailButton" type="button" aria-label="Fechar detalhes"><i data-lucide="x"></i></button>
+                </header>
+                <div id="eventDetailContent"></div>
+              </div>
+            </div>
+            <div class="modal-backdrop" id="eventModal" hidden>
+              <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="eventModalTitle">
+                <header class="modal-header">
+                  <h2 id="eventModalTitle">Cadastrar evento</h2>
+                  <button class="icon-button modal-close" id="closeEventFormButton" type="button" aria-label="Fechar evento"><i data-lucide="x"></i></button>
+                </header>
+                <form class="data-form" id="eventForm">
+                  <input type="hidden" name="id" id="eventId" />
+                  <div class="form-grid">
+                    <label>Título<input name="title" required placeholder="Ex: Congresso de Jovens" /></label>
+                    <label>Tipo<select name="type"><option>Culto especial</option><option>Congresso</option><option>Conferência</option><option>Retiro</option><option>Encontro</option><option>Ação social</option><option>Reunião</option></select></label>
+                    <label>Status<select name="status"><option>Ativo</option><option>Rascunho</option><option>Encerrado</option><option>Cancelado</option></select></label>
+                    <label>Departamento<select name="department" id="eventDepartmentSelect"></select></label>
+                    <label>Data de início<input name="startDate" type="date" required /></label>
+                    <label>Hora de início<input name="startTime" type="time" /></label>
+                    <label>Duração<input name="durationValue" type="number" min="0" step="1" placeholder="Ex: 2" /></label>
+                    <label>Unidade<select name="durationUnit"><option value="hours">Horas</option><option value="minutes">Minutos</option><option value="days">Dias</option></select></label>
+                    <label>Local<select name="locationChurchId" id="eventLocationSelect"></select></label>
+                    <label class="event-custom-location" hidden>Local externo<input name="location" id="eventCustomLocationInput" placeholder="Endereço, sítio, outra igreja..." /></label>
+                    <label>Público<select name="audience"><option>Toda igreja</option><option>Membros</option><option>Visitantes</option><option>Jovens</option><option>Casais</option><option>Kids</option><option>Liderança</option></select></label>
+                    <label>Vagas<input name="capacity" type="number" min="0" step="1" placeholder="Sem limite" /></label>
+                    <label>Inscrições<select name="registrationStatus"><option value="closed">Sem inscrição</option><option value="open">Abertas</option><option value="soon">Em breve</option><option value="full">Esgotadas</option></select></label>
+                    <label>Responsável<select name="ownerId" id="eventOwnerSelect"></select></label>
+                    <label class="event-manual-owner" hidden>Responsável manual<input name="owner" id="eventManualOwnerInput" placeholder="Ministério ou líder responsável" /></label>
+                    <label>Contato<input name="contact" placeholder="Telefone ou e-mail" /></label>
+                    <label class="span-3">Descrição<textarea name="description" rows="5" placeholder="Resumo, programação, orientações e observações"></textarea></label>
+                  </div>
+                  <footer class="modal-actions">
+                    <button class="save" type="submit"><i data-lucide="circle-check"></i> Salvar evento</button>
+                    <button class="outline" type="button" data-clear-form="eventForm"><i data-lucide="eraser"></i> Limpar</button>
+                  </footer>
+                </form>
+              </div>
+            </div>
+          </section>
+
+          <section class="view" id="kids">
+            <div class="panel">
+              <h2>Kids</h2>
+              <div class="empty-state"><i data-lucide="baby"></i><strong>Nenhum ambiente kids configurado</strong><span>Vamos criar salas, responsáveis, check-in e check-out quando avançarmos nesta seção.</span></div>
+            </div>
+          </section>
+
+          <section class="view" id="finance">
+            <div class="page-title"><span>Financeiro</span><button class="help-button">Ajuda</button></div>
+            <div class="panel">
+              <div class="panel-title-row">
+                <h2>Financeiro</h2>
+                <button class="outline report-button" id="openFinanceReportsButton" type="button"><i data-lucide="file-text"></i> Relatórios</button>
+                <button class="icon-fab" id="openFinanceFormButton" type="button" title="Novo lançamento" aria-label="Novo lançamento"><i data-lucide="plus"></i></button>
+              </div>
+              <div class="finance-summary">
+                <article><span>Entradas</span><strong id="financeIncomeTotal">R$ 0,00</strong></article>
+                <article><span>Saídas</span><strong id="financeExpenseTotal">R$ 0,00</strong></article>
+                <article><span>Saldo</span><strong id="financeBalanceTotal">R$ 0,00</strong></article>
+              </div>
+              <div class="empty-state" id="financeEmpty"><i data-lucide="badge-dollar-sign"></i><strong>Nenhum lançamento financeiro</strong><span>Entradas, saídas, campanhas e relatórios aparecerão aqui.</span></div>
+              <form class="finance-filter" id="financeFilterForm">
+                <label>De<input id="financeStartDate" type="date" /></label>
+                <label>Até<input id="financeEndDate" type="date" /></label>
+                <button class="outline" type="button" id="clearFinanceFilterButton"><i data-lucide="rotate-ccw"></i> Limpar filtro</button>
+              </form>
+              <div class="finance-dashboard">
+                <article class="finance-chart-card span-wide">
+                  <h3>Evolução por mês</h3>
+                  <div class="chart-mode-control" aria-label="Modo do gráfico de evolução">
+                    <button type="button" data-finance-evolution="day">Dia</button>
+                    <button class="is-selected" type="button" data-finance-evolution="month">Mês</button>
+                    <button type="button" data-finance-evolution="year">Ano</button>
+                  </div>
+                  <div id="financeMonthlyChart" class="line-chart"></div>
+                </article>
+                <article class="finance-chart-card">
+                  <h3>Por dia da semana</h3>
+                  <div id="financeWeekdayChart" class="bar-chart"></div>
+                </article>
+                <article class="finance-chart-card">
+                  <h3>Entradas x saídas</h3>
+                  <div id="financeDonutChart" class="donut-chart"></div>
+                </article>
+                <article class="finance-chart-card">
+                  <h3>Categorias de entrada</h3>
+                  <div id="financeIncomeCategoryChart" class="category-bars"></div>
+                </article>
+                <article class="finance-chart-card">
+                  <h3>Categorias de saída</h3>
+                  <div id="financeExpenseCategoryChart" class="category-bars"></div>
+                </article>
+              </div>
+              <div class="finance-reports" id="financeReportsModal" hidden>
+                <div class="finance-report-header">
+                  <button class="icon-button modal-close" id="closeFinanceReportsButton" type="button" aria-label="Fechar relatórios"><i data-lucide="x"></i></button>
+                  <h2>Relatórios contábeis</h2>
+                  <div class="report-mode-control" aria-label="Tipo de relatório financeiro">
+                    <button class="is-selected" type="button" data-finance-report="dre">DRE</button>
+                    <button type="button" data-finance-report="cashflow">Fluxo de caixa</button>
+                    <button type="button" data-finance-report="categories">Categorias</button>
+                    <button type="button" data-finance-report="public">Prestação</button>
+                    <button type="button" data-finance-report="planning">Planejamento</button>
+                  </div>
+                </div>
+                <form class="finance-filter report-filter" id="financeReportFilterForm">
+                  <label>De<input id="reportStartDate" type="date" /></label>
+                  <label>Até<input id="reportEndDate" type="date" /></label>
+                  <label>Nome/matrícula<input id="reportPartySearch" type="search" placeholder="Nome, matrícula, fornecedor, NF..." /></label>
+                  <button class="outline" type="button" id="clearReportFilterButton"><i data-lucide="rotate-ccw"></i> Limpar filtro</button>
+                </form>
+                <div class="report-export-actions" aria-label="Exportar relatório">
+                  <button class="outline" type="button" data-export-report="pdf"><i data-lucide="file-down"></i> PDF</button>
+                  <button class="outline" type="button" data-export-report="csv"><i data-lucide="file-spreadsheet"></i> CSV</button>
+                  <button class="outline" type="button" data-export-report="xlsx"><i data-lucide="sheet"></i> XLSX</button>
+                </div>
+                <div id="financeReportContent" class="finance-report-content"></div>
+              </div>
+              <div class="table-wrap" id="financeTableWrap" hidden>
+                <table>
+                  <thead><tr><th>Data</th><th>Tipo</th><th>Categoria</th><th>Origem/Destino</th><th>Descrição</th><th>Valor</th><th>Ações</th></tr></thead>
+                  <tbody id="financeTable"></tbody>
+                </table>
+              </div>
+              <div class="pagination" id="financePagination" hidden></div>
+            </div>
+            <div class="modal-backdrop" id="financeModal" hidden>
+              <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="financeModalTitle">
+                <header class="modal-header">
+                  <h2 id="financeModalTitle">Novo lançamento</h2>
+                  <button class="icon-button modal-close" id="closeFinanceFormButton" type="button" aria-label="Fechar lançamento"><i data-lucide="x"></i></button>
+                </header>
+                <form class="data-form" id="financeForm">
+                  <div class="form-grid">
+                    <label>Tipo<select name="type"><option value="income">Entrada</option><option value="expense">Saída</option></select></label>
+                    <label>Data<input name="date" type="date" required /></label>
+                    <label>Valor<input name="amount" type="number" min="0" step="0.01" placeholder="0,00" required /></label>
+                    <label>Categoria<select name="category" id="financeCategorySelect" required></select></label>
+                    <label class="finance-income-field">Remetente<select name="counterpartyKey" id="financePersonSelect"></select></label>
+                    <label class="finance-income-field">Nome/remetente<input name="counterpartyName" id="financeCounterpartyName" placeholder="Anônimo ou nome da pessoa" /></label>
+                    <label class="finance-income-field">Matrícula<input name="counterpartyRegistration" id="financeCounterpartyRegistration" placeholder="Matrícula, se houver" /></label>
+                    <label class="finance-expense-field">Fornecedor<input name="supplierName" placeholder="Fornecedor ou prestador" /></label>
+                    <label class="finance-expense-field">Destinatário<input name="recipientName" placeholder="Quem recebeu / centro atendido" /></label>
+                    <label class="finance-expense-field">Nota fiscal<input name="invoiceCode" placeholder="Código da NF, se houver" /></label>
+                    <label>Documento<input name="documentCode" placeholder="Recibo, PIX, pedido ou referência" /></label>
+                    <label>Categoria<input name="category" placeholder="Dízimos, ofertas, eventos..." required /></label>
+                    <label class="span-2">Descrição<input name="description" placeholder="Descrição do lançamento" /></label>
+                    <label class="span-3">Observações<textarea name="notes" rows="4"></textarea></label>
+                  </div>
+                  <footer class="modal-actions">
+                    <button class="save" type="submit"><i data-lucide="circle-check"></i> Salvar lançamento</button>
+                    <button class="outline" type="button" data-clear-form="financeForm"><i data-lucide="eraser"></i> Limpar</button>
+                  </footer>
+                </form>
+              </div>
+            </div>
+          </section>
+
+          <section class="view" id="financeLegacy" hidden>
+            <div class="page-title"><span>Financeiro</span><button class="help-button">Ajuda</button></div>
+            <div class="panel">
+              <h2>Financeiro</h2>
+              <div class="empty-state"><i data-lucide="badge-dollar-sign"></i><strong>Nenhuma categoria financeira cadastrada</strong><span>Entradas, saídas, campanhas e relatórios serão implementados por etapas.</span></div>
+            </div>
+          </section>
+
+          <section class="view" id="library">
+            <div class="panel">
+              <h2>Biblioteca</h2>
+              <div class="empty-state"><i data-lucide="library"></i><strong>Nenhum material publicado</strong><span>Materiais, estudos, documentos e vídeos aparecerão aqui.</span></div>
+            </div>
+          </section>
+
+          <section class="view" id="messages">
+            <div class="panel">
+              <h2>Comunicados</h2>
+              <form class="message-composer" id="messageForm">
+                <label>Título<input name="title" placeholder="Título do comunicado" required /></label>
+                <label>Público<select name="audience"><option>Toda igreja</option><option>Líderes</option><option>Kids</option></select></label>
+                <label class="span-2">Mensagem<textarea name="message" rows="6" placeholder="Escreva o comunicado"></textarea></label>
+                <button class="save" type="submit">Publicar comunicado</button>
+              </form>
+              <div class="empty-state compact-empty" id="messagesEmpty">
+                <i data-lucide="messages-square"></i>
+                <strong>Nenhum comunicado publicado</strong>
+              </div>
+              <div class="list" id="messagesList"></div>
+            </div>
+          </section>
+
+          <section class="view" id="mobile">
+            <div class="app-preview-layout">
+              <div class="panel">
+                <h2>App / Site</h2>
+                <p class="lead">Configure a experiência pública que membros e visitantes verão no app.</p>
+                <form class="app-site-form" id="appSiteForm">
+                  <div class="form-grid">
+                    <label>Chamada principal<input name="mobileHeroTitle" id="mobileHeroTitle" placeholder="Bem-vindo à Filadélfia" /></label>
+                    <label>Subtítulo<input name="mobileHeroSubtitle" id="mobileHeroSubtitle" placeholder="Uma igreja para servir e cuidar" /></label>
+                    <label>Versículo / frase<input name="mobileVerse" id="mobileVerse" placeholder="O Senhor é o meu pastor..." /></label>
+                    <label>Link da Bíblia<input name="bibleLink" id="bibleLink" placeholder="https://..." /></label>
+                    <label>Chave Pix / ofertas<input name="pixKey" id="pixKey" placeholder="Chave Pix da igreja" /></label>
+                    <label>Contato público<input name="publicContact" id="publicContact" placeholder="Telefone, WhatsApp ou e-mail" /></label>
+                    <label class="span-2">Banner / aviso<input name="mobileBanner" id="mobileBanner" placeholder="Ex: Domingo da família às 18h45" /></label>
+                    <label class="span-3">Conteúdo publicado<textarea name="mobileContent" id="mobileContent" rows="5" placeholder="Texto, orientação, link de vídeo ou aviso que aparecerá no app"></textarea></label>
+                  </div>
+                  <footer class="modal-actions inline-actions">
+                    <button class="save" type="submit"><i data-lucide="circle-check"></i> Salvar publicação</button>
+                    <button class="outline" type="button" id="clearAppSiteButton"><i data-lucide="eraser"></i> Limpar</button>
+                  </footer>
+                </form>
+                <div class="app-publish-grid">
+                  <article><i data-lucide="calendar-days"></i><strong id="appEventsCount">0</strong><span>eventos ativos</span></article>
+                  <article><i data-lucide="messages-square"></i><strong id="appMessagesCount">0</strong><span>comunicados</span></article>
+                  <article><i data-lucide="users"></i><strong id="appMembersCount">0</strong><span>cadastros</span></article>
+                  <article><i data-lucide="church"></i><strong id="appChurchesCount">0</strong><span>igrejas</span></article>
+                </div>
+              </div>
+              <div class="phone">
+                <div class="phone-screen">
+                  <header>
+                    <strong data-church-short-name>Filadélfia</strong>
+                    <i data-lucide="menu"></i>
+                  </header>
+                  <label class="app-search"><i data-lucide="search"></i><input value="Assembleia" readonly /></label>
+                  <div class="app-hero app-hero-empty">
+                    <img id="phoneLogoImage" alt="" hidden />
+                    <div class="phone-logo-fallback brand-mark"><span>F</span></div>
+                    <span id="phoneHeroTitle">Bem-vindo</span>
+                    <small id="phoneHeroSubtitle"></small>
+                  </div>
+                  <div class="shortcut-row">
+                    <button><i data-lucide="calendar"></i><span>Agenda</span></button>
+                    <button><i data-lucide="book-open"></i><span>Bíblia</span></button>
+                    <button><i data-lucide="hand-heart"></i><span>Ofertas</span></button>
+                    <button><i data-lucide="qr-code"></i><span>Carteirinha</span></button>
+                  </div>
+                  <div class="phone-banner" id="phoneBanner" hidden></div>
+                  <div class="app-section-title"><strong>Conteúdos</strong><span id="phoneContentCount">0 itens</span></div>
+                  <div class="phone-content-list" id="phoneContentList"></div>
+                  <nav class="app-bottom">
+                    <button><i data-lucide="calendar"></i><span>Agenda</span></button>
+                    <button><i data-lucide="book-open"></i><span>Bíblia</span></button>
+                    <button><i data-lucide="circle-dollar-sign"></i><span>Ofertas</span></button>
+                    <button><i data-lucide="qr-code"></i><span>Carteirinha</span></button>
+                  </nav>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="view" id="settings">
+            <div class="page-title"><span>Admin - Configurações</span><button class="help-button" id="resetDemoButton">Resetar dados locais</button></div>
+            <form class="panel admin-settings" id="settingsForm">
+              <h2>Configurações da igreja</h2>
+              <div class="settings-layout">
+                <div class="settings-grid">
+                  <label><span>Nome da igreja</span><input name="churchName" id="settingChurchName" required /></label>
+                  <label><span>Subtítulo</span><input name="churchSubtitle" id="settingChurchSubtitle" placeholder="Ex: A Noiva" /></label>
+                  <label><span>Nome curto no app</span><input name="shortName" id="settingShortName" placeholder="Ex: Filadélfia" /></label>
+                  <label><span>E-mail de contato</span><input type="email" name="contactEmail" id="settingContactEmail" /></label>
+                  <label><span>Telefone</span><input name="contactPhone" id="settingContactPhone" /></label>
+                  <label><span>Publicar app/site</span><select name="publishApp" id="settingPublishApp"><option value="yes">Sim</option><option value="no">Não</option></select></label>
+                </div>
+                <div class="logo-uploader">
+                  <div class="logo-preview">
+                    <img id="settingsLogoPreview" alt="" hidden />
+                    <div class="brand-mark" id="settingsLogoFallback"><span>F</span></div>
+                  </div>
+                  <label class="file-picker">
+                    <i data-lucide="image-up"></i>
+                    <span>Enviar logo da igreja</span>
+                    <input type="file" id="logoInput" accept="image/*" />
+                  </label>
+                  <button class="outline" type="button" id="removeLogoButton">Remover logo</button>
+                </div>
+              </div>
+
+              <h2>Paleta do app</h2>
+              <div class="palette-grid">
+                <label><span>Cor principal</span><input type="color" name="primaryColor" id="primaryColor" value="#095c85" /></label>
+                <label><span>Cor institucional</span><input type="color" name="brandColor" id="brandColor" value="#07354b" /></label>
+                <label><span>Cor de apoio</span><input type="color" name="accentColor" id="accentColor" value="#5c8fc9" /></label>
+                <label><span>Fundo do admin</span><input type="color" name="backgroundColor" id="backgroundColor" value="#f3f3fb" /></label>
+              </div>
+
+              <div class="palette-presets" aria-label="Paletas prontas">
+                <button type="button" data-palette="#095c85,#07354b,#5c8fc9,#f3f3fb">Filadélfia</button>
+                <button type="button" data-palette="#2f80ed,#17233a,#56ccf2,#f4f7fb">Azul</button>
+                <button type="button" data-palette="#16a34a,#153c2f,#65a30d,#f4fbf6">Verde</button>
+                <button type="button" data-palette="#b45309,#2b2118,#d97706,#fbf7f1">Clássica</button>
+              </div>
+
+              <div class="form-actions">
+                <button class="save" type="submit"><i data-lucide="save"></i> Salvar configurações</button>
+                <span class="save-status" id="saveStatus" role="status"></span>
+              </div>
+            </form>
+          </section>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>
+
+
+
+
