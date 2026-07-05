@@ -531,10 +531,18 @@
                   <label class="span-2">Endereço<input name="address" required placeholder="Rua, número, bairro" /></label>
                   <label>Cidade<input name="city" required placeholder="Cidade" /></label>
                   <label>Estado<input name="state" required placeholder="UF" maxlength="2" /></label>
+                  <div class="span-3 geocode-panel">
+                    <div>
+                      <strong>Localização no mapa</strong>
+                      <span>Preencha endereço, cidade e UF. O app encontra a latitude e longitude automaticamente.</span>
+                    </div>
+                    <button class="outline" type="button" id="locateChurchButton"><i data-lucide="map-pin"></i> Localizar pelo endereço</button>
+                    <span class="save-status" id="churchGeocodeStatus" role="status"></span>
+                  </div>
                   <label>Status<select name="status"><option>Ativa</option><option>Congregação</option><option>Em implantação</option></select></label>
                   <label>Horário principal<input name="serviceTime" placeholder="Domingo, 19h" /></label>
-                  <label>Latitude<input name="lat" placeholder="-22.8268" /></label>
-                  <label>Longitude<input name="lng" placeholder="-43.0634" /></label>
+                  <label class="technical-field">Latitude<input name="lat" inputmode="decimal" placeholder="Automático" /></label>
+                  <label class="technical-field">Longitude<input name="lng" inputmode="decimal" placeholder="Automático" /></label>
                 </div>
                 <footer class="modal-actions">
                   <button class="save" type="submit"><i data-lucide="circle-check"></i> Salvar igreja</button>

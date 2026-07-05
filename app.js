@@ -1696,6 +1696,7 @@ function openChurchModal(title = "Cadastrar igreja") {
   const modal = document.querySelector("#churchModal");
   if (!modal) return;
   setText("#churchModalTitle", title);
+  setText("#churchGeocodeStatus", "");
   modal.hidden = false;
   modal.removeAttribute("hidden");
   document.body.classList.add("modal-open");
@@ -2214,6 +2215,29 @@ function churchAddressQuery(church) {
   return [church.address, church.city, church.state, "Brasil"].filter(Boolean).join(", ");
 }
 
+async function geocodeChurchAddress(church) {
+  const query = churchAddressQuery(church);
+  if (!church.address || !church.city || !church.state || query.length < 8) {
+    return { ok: false, message: "Preencha endereço, cidade e UF para localizar no mapa." };
+  }
+
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${encodeURIComponent(query)}`;
+  const response = await fetch(url, {
+    headers: { Accept: "application/json" }
+  });
+  if (!response.ok) return { ok: false, message: "Nao foi possivel consultar o mapa agora." };
+
+  const [result] = await response.json();
+  if (!result) return { ok: false, message: "Endereco nao encontrado. Confira rua, numero, bairro, cidade e UF." };
+
+  return {
+    ok: true,
+    lat: result.lat,
+    lng: result.lon,
+    label: result.display_name || query
+  };
+}
+
 async function geocodeMissingChurches() {
   const candidates = state.churches.filter((church) => {
     const hasCoords = Number.isFinite(parseCoordinate(church.lat)) && Number.isFinite(parseCoordinate(church.lng));
@@ -2224,13 +2248,10 @@ async function geocodeMissingChurches() {
   const church = candidates[0];
   geocodingChurchIds.add(church.id);
   try {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(churchAddressQuery(church))}`;
-    const response = await fetch(url);
-    if (!response.ok) return;
-    const [result] = await response.json();
-    if (!result) return;
+    const result = await geocodeChurchAddress(church);
+    if (!result.ok) return;
     church.lat = result.lat;
-    church.lng = result.lon;
+    church.lng = result.lng;
     saveState();
     renderChurches();
   } catch {
@@ -3885,10 +3906,22 @@ document.querySelector("#memberForm")?.addEventListener("submit", async (event) 
   renderAll();
 });
 
-document.querySelector("#churchForm")?.addEventListener("submit", (event) => {
+document.querySelector("#churchForm")?.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!canManage("churches")) return;
   const data = formData(event.currentTarget);
+  const hasCoords = Number.isFinite(parseCoordinate(data.lat)) && Number.isFinite(parseCoordinate(data.lng));
+  if (!hasCoords) {
+    setText("#churchGeocodeStatus", "Localizando pelo endereco...");
+    const geocoded = await geocodeChurchAddress(data);
+    if (geocoded.ok) {
+      data.lat = geocoded.lat;
+      data.lng = geocoded.lng;
+      setText("#churchGeocodeStatus", "Localizacao encontrada.");
+    } else {
+      setText("#churchGeocodeStatus", geocoded.message);
+    }
+  }
   const existingIndex = state.churches.findIndex((church) => church.id === data.id);
   const church = {
     ...data,
@@ -3902,8 +3935,10 @@ document.querySelector("#churchForm")?.addEventListener("submit", (event) => {
   saveState();
   event.currentTarget.reset();
   setValue("#churchId", "");
+  setText("#churchGeocodeStatus", "");
   closeChurchModal();
   renderAll();
+  showAppToast(church.lat && church.lng ? "Igreja salva e posicionada no mapa." : "Igreja salva. Confira o endereco para posicionar no mapa.", church.lat && church.lng ? "success" : "warning");
 });
 
 document.querySelector("#eventForm")?.addEventListener("submit", (event) => {
@@ -3967,6 +4002,32 @@ document.querySelector("#closePrayerFormButton")?.addEventListener("click", (eve
 
 document.querySelector("#openChurchFormButton")?.addEventListener("click", (event) => {
   window.openChurchFormFromButton(event);
+});
+
+document.querySelector("#locateChurchButton")?.addEventListener("click", async () => {
+  const form = document.querySelector("#churchForm");
+  const button = document.querySelector("#locateChurchButton");
+  if (!form || !button) return;
+
+  button.disabled = true;
+  setText("#churchGeocodeStatus", "Localizando pelo endereco...");
+  try {
+    const result = await geocodeChurchAddress(formData(form));
+    if (!result.ok) {
+      setText("#churchGeocodeStatus", result.message);
+      showAppToast(result.message, "warning");
+      return;
+    }
+    form.elements.lat.value = result.lat;
+    form.elements.lng.value = result.lng;
+    setText("#churchGeocodeStatus", "Localizacao encontrada.");
+    showAppToast("Localizacao encontrada no mapa.", "success");
+  } catch {
+    setText("#churchGeocodeStatus", "Nao foi possivel localizar agora.");
+    showAppToast("Nao foi possivel consultar o mapa agora.", "error");
+  } finally {
+    button.disabled = false;
+  }
 });
 
 document.querySelector("#closeChurchFormButton")?.addEventListener("click", (event) => {
@@ -4406,6 +4467,7 @@ document.addEventListener("click", (event) => {
     const church = state.churches.find((item) => item.id === editChurch.dataset.editChurch);
     const form = document.querySelector("#churchForm");
     if (church && form) {
+      setText("#churchGeocodeStatus", "");
       Object.entries(church).forEach(([key, value]) => {
         const field = form.elements[key];
         if (field) field.value = value;
@@ -4496,7 +4558,10 @@ document.addEventListener("click", (event) => {
   const clearButton = event.target.closest("[data-clear-form]");
   if (clearButton) {
     document.querySelector(`#${clearButton.dataset.clearForm}`)?.reset();
-    if (clearButton.dataset.clearForm === "churchForm") setValue("#churchId", "");
+    if (clearButton.dataset.clearForm === "churchForm") {
+      setValue("#churchId", "");
+      setText("#churchGeocodeStatus", "");
+    }
     if (clearButton.dataset.clearForm === "memberForm") {
       setValue("#memberId", "");
       renderMemberChurchOptions();

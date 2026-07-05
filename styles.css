@@ -704,6 +704,41 @@ label {
   grid-column: span 3;
 }
 
+.geocode-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid #d8dde8;
+  border-radius: 7px;
+  background: #f8fafc;
+}
+
+.geocode-panel div {
+  display: grid;
+  gap: 4px;
+}
+
+.geocode-panel strong {
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.geocode-panel span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.geocode-panel .save-status {
+  min-width: 150px;
+  text-align: right;
+}
+
+.technical-field {
+  opacity: 0.86;
+}
+
 .check-row {
   display: flex;
   align-items: center;
@@ -1551,6 +1586,16 @@ tbody tr:hover {
   .span-2,
   .span-3 {
     grid-column: auto;
+  }
+
+  .geocode-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .geocode-panel .save-status {
+    min-width: 0;
+    text-align: left;
   }
 
   .donut-row,
