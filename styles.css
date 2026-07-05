@@ -109,7 +109,7 @@ table {
   color: #f3f6fb;
   overflow: hidden;
   box-shadow: 8px 0 20px rgba(12, 20, 35, 0.24);
-  z-index: 5;
+  z-index: 100;
   transition: width 180ms ease;
 }
 
@@ -1497,7 +1497,7 @@ tbody tr:hover {
     width: min(86vw, 320px);
     transform: translateX(-105%);
     transition: transform 180ms ease;
-    z-index: 40;
+    z-index: 1200;
   }
 
   .sidebar-close {
@@ -1512,7 +1512,7 @@ tbody tr:hover {
     content: "";
     position: fixed;
     inset: 0;
-    z-index: 30;
+    z-index: 1100;
     background: rgba(15, 23, 42, 0.54);
     backdrop-filter: blur(1px);
   }
@@ -2259,7 +2259,7 @@ th:last-child {
   position: fixed;
   top: 18px;
   right: 18px;
-  z-index: 80;
+  z-index: 1500;
   width: min(420px, calc(100vw - 32px));
   border: 1px solid #b9e7c8;
   border-radius: 8px;
@@ -3068,6 +3068,8 @@ td small,
 }
 
 .church-map {
+  position: relative;
+  z-index: 0;
   width: 100%;
   height: min(58vh, 520px);
   min-height: 360px;
@@ -3077,6 +3079,15 @@ td small,
   margin-top: 22px;
   background: #e9eef4;
   box-shadow: var(--shadow);
+}
+
+.church-map .leaflet-pane {
+  z-index: 1;
+}
+
+.church-map .leaflet-top,
+.church-map .leaflet-bottom {
+  z-index: 2;
 }
 
 .map-note {
@@ -3390,7 +3401,7 @@ td small,
 #financeReportsModal {
   position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: 1300;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -4339,7 +4350,7 @@ td small,
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: 1300;
   display: grid;
   place-items: center;
   padding: 24px;
