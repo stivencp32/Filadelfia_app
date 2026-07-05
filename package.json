@@ -4,7 +4,8 @@
   "description": "Protótipo web estático inspirado na demonstração em vídeo e adaptado para a identidade visual da Assembleia de Deus Ministério Filadélfia.",
   "main": "app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "check": "node --check app.js",
+    "smoke": "node scripts/smoke-test.js"
   },
   "keywords": [],
   "author": "",
