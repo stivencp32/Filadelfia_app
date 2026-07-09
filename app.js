@@ -1913,6 +1913,21 @@ function syncEventLocationFields() {
   customField.hidden = !isCustom;
 }
 
+function churchLocationOptionsHtml(selected = "") {
+  return [
+    `<option value="">Selecione uma igreja</option>`,
+    ...(state.churches || []).map((church) => `<option value="${escapeHtml(church.id)}" ${church.id === selected ? "selected" : ""}>${escapeHtml(church.name || "Igreja sem nome")}</option>`),
+    `<option value="custom" ${selected === "custom" ? "selected" : ""}>Outro local</option>`
+  ].join("");
+}
+
+function syncMinistryActivityLocationFields() {
+  const form = document.querySelector("#ministryActivityForm");
+  const customField = document.querySelector(".ministry-custom-location");
+  if (!form || !customField) return;
+  customField.hidden = form.elements.locationChurchId?.value !== "custom";
+}
+
 function syncEventOwnerFields() {
   const form = document.querySelector("#eventForm");
   const manualField = document.querySelector(".event-manual-owner");
@@ -2987,7 +3002,8 @@ function renderMinistryActivityForm(department) {
       <label>Título<input name="title" required placeholder="Ex: Ensaio geral" /></label>
       <label>Data<input name="date" type="date" /></label>
       <label>Hora<input name="time" type="time" /></label>
-      <label class="span-2">Local<input name="location" placeholder="Templo, sala, online..." /></label>
+      <label>Local<select name="locationChurchId">${churchLocationOptionsHtml()}</select></label>
+      <label class="ministry-custom-location" hidden>Local externo<input name="location" placeholder="Endereço, sala, online..." /></label>
       <label class="span-2">Observações<textarea name="notes" rows="2" placeholder="Equipe convocada, repertório, pauta ou instruções"></textarea></label>
       <button class="save span-2" type="submit"><i data-lucide="calendar-plus"></i> Salvar agenda</button>
     </form>
@@ -4235,6 +4251,7 @@ document.addEventListener("submit", (event) => {
   }
 
   if (form.id === "ministryActivityForm") {
+    const churchLocation = data.locationChurchId && data.locationChurchId !== "custom" ? selectedChurchName(data.locationChurchId) : "";
     state.ministryActivities.unshift({
       id: crypto.randomUUID(),
       department,
@@ -4242,7 +4259,8 @@ document.addEventListener("submit", (event) => {
       title: data.title,
       date: data.date || "",
       time: data.time || "",
-      location: data.location || "",
+      locationChurchId: data.locationChurchId || "",
+      location: data.locationChurchId === "custom" ? data.location : churchLocation,
       notes: data.notes || "",
       audience: "Equipe do departamento",
       createdAt: new Date().toISOString()
@@ -4522,6 +4540,12 @@ document.querySelector("#eventForm")?.addEventListener("change", (event) => {
   }
   if (event.target.name === "locationChurchId") syncEventLocationFields();
   if (event.target.name === "ownerId") syncEventOwnerFields();
+});
+
+document.addEventListener("change", (event) => {
+  if (event.target.closest("#ministryActivityForm") && event.target.name === "locationChurchId") {
+    syncMinistryActivityLocationFields();
+  }
 });
 
 document.addEventListener("click", (event) => {
