@@ -2875,7 +2875,7 @@ function renderFinance() {
   table.innerHTML = pageEntries.map((entry) => `
     <tr>
       <td data-label="Data">${escapeHtml(formatDate(entry.date) || "-")}</td>
-      <td>${entry.type === "income" ? "Entrada" : "Saída"}</td>
+      <td data-label="Tipo">${entry.type === "income" ? "Entrada" : "Saída"}</td>
       <td data-label="Categoria">${escapeHtml(entry.category || "-")}</td>
       <td data-label="Origem/Destino">${escapeHtml(financeEntryParty(entry))}</td>
       <td data-label="Descrição">${escapeHtml(entry.description || entry.notes || "-")}</td>
@@ -3082,7 +3082,7 @@ function renderCashflowReport(entries) {
         <tbody>
           ${rows.map((row) => {
             running += row.income - row.expense;
-            return `<tr><td>${escapeHtml(formatDate(row.date))}</td><td class="money-in">${escapeHtml(formatCurrency(row.income))}</td><td class="money-out">${escapeHtml(formatCurrency(row.expense))}</td><td><strong>${escapeHtml(formatCurrency(running))}</strong></td></tr>`;
+            return `<tr><td data-label="Data">${escapeHtml(formatDate(row.date))}</td><td data-label="Entradas" class="money-in">${escapeHtml(formatCurrency(row.income))}</td><td data-label="Saídas" class="money-out">${escapeHtml(formatCurrency(row.expense))}</td><td data-label="Saldo acumulado"><strong>${escapeHtml(formatCurrency(running))}</strong></td></tr>`;
           }).join("")}
         </tbody>
       </table>

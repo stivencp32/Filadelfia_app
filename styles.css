@@ -4597,9 +4597,12 @@ body.modal-open {
   }
 
   .table-wrap td {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
     min-height: 46px;
     display: grid;
-    grid-template-columns: minmax(92px, 38%) minmax(0, 1fr);
+    grid-template-columns: minmax(104px, 34%) minmax(0, 1fr);
     gap: 12px;
     align-items: center;
     border-bottom: 1px solid #edf1f7;
@@ -4655,9 +4658,9 @@ body.modal-open {
 
   #financeReportsModal .finance-report-header {
     grid-template-columns: minmax(0, 1fr) auto;
-    min-height: 0;
+    min-height: 176px;
     padding-top: 18px;
-    position: sticky;
+    position: relative;
     top: 0;
     z-index: 2;
   }
@@ -4687,7 +4690,12 @@ body.modal-open {
 
   #financeReportsModal .report-filter {
     display: grid;
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #financeReportsModal .report-filter label:nth-child(3),
+  #financeReportsModal .report-filter .outline {
+    grid-column: 1 / -1;
   }
 
   #financeReportsModal .report-export-actions {
@@ -4724,22 +4732,26 @@ body.modal-open {
     gap: 6px;
   }
 
-  .dre-table {
+  #financeReportsModal .report-table-wrap {
     max-height: none;
     overflow: visible;
   }
 
+  #financeReportsModal .report-table-wrap table,
   .dre-table table,
   #financeTableWrap table {
     min-width: 0;
     display: block;
   }
 
+  #financeReportsModal .report-table-wrap thead,
   .dre-table thead,
   #financeTableWrap thead {
     display: none;
   }
 
+  #financeReportsModal .report-table-wrap tbody,
+  #financeReportsModal .report-table-wrap tr,
   .dre-table tbody,
   .dre-table tr,
   #financeTableWrap tbody,
@@ -4748,6 +4760,7 @@ body.modal-open {
     gap: 8px;
   }
 
+  #financeReportsModal .report-table-wrap tr,
   .dre-table tr,
   #financeTableWrap tr {
     margin: 10px;
@@ -4757,25 +4770,29 @@ body.modal-open {
     background: #fff;
   }
 
+  #financeReportsModal .report-table-wrap tbody tr:nth-child(odd),
   .dre-table tbody tr:nth-child(odd),
   #financeTableWrap tbody tr:nth-child(odd) {
     background: #fff;
   }
 
+  #financeReportsModal .report-table-wrap td,
   .dre-table td,
   #financeTableWrap td {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
     display: grid;
-    grid-template-columns: minmax(92px, 38%) minmax(0, 1fr);
+    grid-template-columns: minmax(104px, 34%) minmax(0, 1fr);
     align-items: start;
     gap: 10px;
-    width: 100%;
-    max-width: none;
     border: 0;
     padding: 0;
     white-space: normal;
     overflow-wrap: anywhere;
   }
 
+  #financeReportsModal .report-table-wrap td::before,
   .dre-table td::before,
   #financeTableWrap td::before {
     content: attr(data-label);
@@ -4785,12 +4802,15 @@ body.modal-open {
     text-transform: uppercase;
   }
 
+  #financeReportsModal .report-table-wrap td:last-child,
   .dre-table td:last-child,
   #financeTableWrap td:last-child {
     width: 100%;
     white-space: normal;
   }
 
+  #financeReportsModal .report-table-wrap .money-in,
+  #financeReportsModal .report-table-wrap .money-out,
   .dre-table .money-in,
   .dre-table .money-out,
   #financeTableWrap .money-in,
@@ -4819,9 +4839,10 @@ body.modal-open {
   }
 
   #financeReportsModal .report-export-actions {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  #financeReportsModal .report-table-wrap td,
   .dre-table td,
   #financeTableWrap td {
     grid-template-columns: 1fr;
