@@ -225,6 +225,8 @@ const defaultState = {
   events: [],
   pastoralRequests: [],
   financialEntries: [],
+  ministryActivities: [],
+  ministryTasks: [],
   messages: []
 };
 
@@ -233,6 +235,7 @@ let uiState = loadUiState();
 let activeInviteToken = new URLSearchParams(location.search).get("invite") || "";
 let memberFilter = "all";
 let eventFilter = "all";
+let activeMinistryDepartment = "";
 let financeEvolutionMode = "month";
 let financeReportMode = "dre";
 let memberAppView = "home";
@@ -268,6 +271,8 @@ function hydrateState(saved = {}) {
     events: saved.events || [],
     pastoralRequests: saved.pastoralRequests || [],
     financialEntries: saved.financialEntries || [],
+    ministryActivities: saved.ministryActivities || [],
+    ministryTasks: saved.ministryTasks || [],
     messages: saved.messages || []
   };
 
@@ -341,6 +346,8 @@ function stateHasData(value) {
     value?.events?.length ||
     value?.pastoralRequests?.length ||
     value?.financialEntries?.length ||
+    value?.ministryActivities?.length ||
+    value?.ministryTasks?.length ||
     value?.messages?.length
   );
 }
@@ -375,6 +382,8 @@ function mergeSyncedState(local, remote) {
     events: mergeList(local.events, remote.events, ["id", "title", "createdAt"]),
     pastoralRequests: mergeList(local.pastoralRequests, remote.pastoralRequests, ["id", "createdAt"]),
     financialEntries: mergeList(local.financialEntries, remote.financialEntries, ["id", "createdAt"]),
+    ministryActivities: mergeList(local.ministryActivities, remote.ministryActivities, ["id", "createdAt"]),
+    ministryTasks: mergeList(local.ministryTasks, remote.ministryTasks, ["id", "createdAt"]),
     messages: mergeList(local.messages, remote.messages, ["id", "createdAt"])
   });
   return next;
@@ -2796,6 +2805,233 @@ function agendaWeekdayLabel(date) {
   return parsed ? parsed.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "") : "";
 }
 
+function ministryDepartments() {
+  return departmentNames();
+}
+
+function ministryTeam(department) {
+  return [
+    ...(state.members || []).map((member, index) => ({ ...member, _sourceType: "admin", _sourceIndex: index })),
+    ...(state.publicMembers || []).map((member, index) => ({ ...member, _sourceType: "public", _sourceIndex: index }))
+  ]
+    .map(normalizeMember)
+    .filter((member) => String(member.department || "").trim().toLowerCase() === String(department || "").trim().toLowerCase());
+}
+
+function ministryActivities(department) {
+  return (state.ministryActivities || [])
+    .filter((item) => item.department === department)
+    .sort((a, b) => `${a.date || ""} ${a.time || ""}`.localeCompare(`${b.date || ""} ${b.time || ""}`));
+}
+
+function ministryTasks(department) {
+  return (state.ministryTasks || [])
+    .filter((item) => item.department === department)
+    .sort((a, b) => Number(a.done === true) - Number(b.done === true) || `${a.dueDate || "9999-99-99"}`.localeCompare(`${b.dueDate || "9999-99-99"}`));
+}
+
+function ministryRoleOptions(department, selected = "") {
+  return (departmentRoles[department] || [])
+    .map((role) => `<option value="${escapeHtml(role)}" ${role === selected ? "selected" : ""}>${escapeHtml(role)}</option>`)
+    .join("");
+}
+
+function ministryMemberOptions(department = "") {
+  const assignedIds = new Set(ministryTeam(department).map((member) => member.id).filter(Boolean));
+  const members = (state.members || []).map(normalizeMember);
+  if (members.length === 0) return `<option value="">Nenhum membro interno cadastrado</option>`;
+  return [
+    `<option value="">Selecionar membro</option>`,
+    ...members.map((member) => {
+      const label = [member.name || "Sem nome", member.registration ? `Mat. ${member.registration}` : "", member.department && member.department !== department ? member.department : ""].filter(Boolean).join(" - ");
+      return `<option value="${escapeHtml(member.id)}" ${assignedIds.has(member.id) ? "disabled" : ""}>${escapeHtml(label)}</option>`;
+    })
+  ].join("");
+}
+
+function renderMinistries() {
+  const list = document.querySelector("#ministryDepartmentList");
+  const workspace = document.querySelector("#ministryWorkspace");
+  const notice = document.querySelector("#ministriesReadOnlyNotice");
+  const newActivityButton = document.querySelector("#openMinistryActivityButton");
+  if (!list || !workspace || !notice || !newActivityButton) return;
+
+  const mayManage = canManage("ministries");
+  notice.hidden = mayManage;
+  newActivityButton.hidden = !mayManage;
+  const departments = ministryDepartments();
+  const search = String(document.querySelector("#ministrySearchInput")?.value || "").trim().toLowerCase();
+  if (!activeMinistryDepartment || !departments.includes(activeMinistryDepartment)) activeMinistryDepartment = departments[0] || "";
+  const visibleDepartments = departments.filter((department) => !search || department.toLowerCase().includes(search));
+  if (visibleDepartments.length && !visibleDepartments.includes(activeMinistryDepartment)) activeMinistryDepartment = visibleDepartments[0];
+
+  list.innerHTML = visibleDepartments.map((department) => {
+    const team = ministryTeam(department);
+    const activities = ministryActivities(department);
+    const tasks = ministryTasks(department).filter((task) => !task.done);
+    return `
+      <button class="ministry-department-card ${department === activeMinistryDepartment ? "is-selected" : ""}" type="button" data-ministry-department="${escapeHtml(department)}">
+        <span><strong>${escapeHtml(department)}</strong><br><span>${escapeHtml((departmentRoles[department] || []).slice(0, 3).join(", "))}</span></span>
+        <em class="ministry-count-pill">${team.length}</em>
+        <span>${activities.length} agendas • ${tasks.length} pendências</span>
+      </button>
+    `;
+  }).join("") || emptyChart("Nenhum departamento encontrado.");
+
+  workspace.innerHTML = renderMinistryWorkspace(activeMinistryDepartment, mayManage);
+}
+
+function renderMinistryWorkspace(department, mayManage) {
+  if (!department) return emptyChart("Nenhum departamento selecionado.");
+  const team = ministryTeam(department);
+  const activities = ministryActivities(department);
+  const upcomingActivities = activities.filter((item) => !item.date || item.date >= new Date().toISOString().slice(0, 10));
+  const tasks = ministryTasks(department);
+  const openTasks = tasks.filter((task) => !task.done);
+  const leaders = team.filter((member) => member.isLeader === true || member.isLeader === "on" || /l[ií]der|coordenador|tesoureiro|secret[aá]rio/i.test(member.ministryRole || ""));
+  return `
+    <div class="ministry-hero">
+      <div>
+        <h3>${escapeHtml(department)}</h3>
+        <span>${escapeHtml(ministryManagementHint(department))}</span>
+      </div>
+      <div class="ministry-hero-actions">
+        <button class="outline" type="button" data-jump-ministry-form="team" ${mayManage ? "" : "hidden"}><i data-lucide="user-plus"></i> Equipe</button>
+        <button class="outline" type="button" data-jump-ministry-form="activity" ${mayManage ? "" : "hidden"}><i data-lucide="calendar-plus"></i> Agenda</button>
+        <button class="outline" type="button" data-jump-ministry-form="task" ${mayManage ? "" : "hidden"}><i data-lucide="list-checks"></i> Tarefa</button>
+      </div>
+    </div>
+    <div class="ministry-stat-grid">
+      <article><strong>${team.length}</strong><span>Equipe</span></article>
+      <article><strong>${leaders.length}</strong><span>Liderança</span></article>
+      <article><strong>${upcomingActivities.length}</strong><span>Agenda futura</span></article>
+      <article><strong>${openTasks.length}</strong><span>Pendências</span></article>
+    </div>
+    <div class="ministry-grid">
+      <section class="ministry-section">
+        <header><h3>Equipe</h3><span class="ministry-status-pill">${escapeHtml(department)}</span></header>
+        ${mayManage ? renderMinistryTeamForm(department) : ""}
+        <div class="ministry-list">
+          ${team.length ? team.map((member) => `
+            <article class="ministry-list-item">
+              <strong>${escapeHtml(member.name || "Sem nome")}</strong>
+              <span>${escapeHtml([member.ministryRole || "Equipe", member.registration ? `Mat. ${member.registration}` : "", member.phone].filter(Boolean).join(" • "))}</span>
+              <footer>
+                <small>${escapeHtml(member.email || "Sem e-mail")}</small>
+                ${mayManage && member._sourceType !== "public" ? `<button class="table-action secondary" type="button" data-remove-ministry-member="${escapeHtml(member.id)}">Remover da equipe</button>` : ""}
+              </footer>
+            </article>
+          `).join("") : emptyChart("Nenhum integrante vinculado a este departamento.")}
+        </div>
+      </section>
+      <section class="ministry-section">
+        <header><h3>Agenda interna</h3><span class="ministry-status-pill">${upcomingActivities.length} futuras</span></header>
+        ${mayManage ? renderMinistryActivityForm(department) : ""}
+        <div class="ministry-list">
+          ${activities.length ? activities.map((item) => `
+            <article class="ministry-list-item">
+              <strong>${escapeHtml(item.title || "Atividade")}</strong>
+              <span>${escapeHtml([item.type, formatDate(item.date), item.time, item.location].filter(Boolean).join(" • "))}</span>
+              ${item.notes ? `<span>${escapeHtml(item.notes)}</span>` : ""}
+              <footer>
+                <small>${escapeHtml(item.audience || "Equipe do departamento")}</small>
+                ${mayManage ? `<button class="table-action secondary" type="button" data-remove-ministry-activity="${escapeHtml(item.id)}">Remover</button>` : ""}
+              </footer>
+            </article>
+          `).join("") : emptyChart("Nenhuma reunião, ensaio ou escala interna cadastrada.")}
+        </div>
+      </section>
+      <section class="ministry-section">
+        <header><h3>Tarefas e gestão</h3><span class="ministry-status-pill">${openTasks.length} abertas</span></header>
+        ${mayManage ? renderMinistryTaskForm(department) : ""}
+        <div class="ministry-list">
+          ${tasks.length ? tasks.map((task) => `
+            <article class="ministry-list-item">
+              <strong>${task.done ? "Concluída: " : ""}${escapeHtml(task.title || "Tarefa")}</strong>
+              <span>${escapeHtml([task.owner, task.dueDate ? `Prazo ${formatDate(task.dueDate)}` : "", task.priority].filter(Boolean).join(" • "))}</span>
+              ${task.notes ? `<span>${escapeHtml(task.notes)}</span>` : ""}
+              <footer>
+                <small>${task.done ? "Finalizada" : "Em andamento"}</small>
+                ${mayManage ? `<button class="table-action secondary" type="button" data-toggle-ministry-task="${escapeHtml(task.id)}">${task.done ? "Reabrir" : "Concluir"}</button><button class="table-action secondary" type="button" data-remove-ministry-task="${escapeHtml(task.id)}">Remover</button>` : ""}
+              </footer>
+            </article>
+          `).join("") : emptyChart("Nenhuma tarefa administrativa cadastrada.")}
+        </div>
+      </section>
+      <section class="ministry-section">
+        <header><h3>Permissões sugeridas</h3><span class="ministry-status-pill">Acesso</span></header>
+        <div class="ministry-list">
+          ${ministryPermissionHints(department).map((hint) => `<article class="ministry-list-item"><strong>${escapeHtml(hint.title)}</strong><span>${escapeHtml(hint.description)}</span></article>`).join("")}
+        </div>
+      </section>
+    </div>
+  `;
+}
+
+function renderMinistryTeamForm(department) {
+  return `
+    <form class="ministry-inline-form" id="ministryTeamForm">
+      <input type="hidden" name="department" value="${escapeHtml(department)}" />
+      <label>Membro<select name="memberId" required>${ministryMemberOptions(department)}</select></label>
+      <label>Função<select name="ministryRole" required>${ministryRoleOptions(department)}</select></label>
+      <button class="save span-2" type="submit"><i data-lucide="user-plus"></i> Adicionar à equipe</button>
+    </form>
+  `;
+}
+
+function renderMinistryActivityForm(department) {
+  return `
+    <form class="ministry-inline-form" id="ministryActivityForm">
+      <input type="hidden" name="department" value="${escapeHtml(department)}" />
+      <label>Tipo<select name="type"><option>Ensaio</option><option>Reunião</option><option>Escala</option><option>Treinamento</option><option>Visitação</option><option>Plantão</option></select></label>
+      <label>Título<input name="title" required placeholder="Ex: Ensaio geral" /></label>
+      <label>Data<input name="date" type="date" /></label>
+      <label>Hora<input name="time" type="time" /></label>
+      <label class="span-2">Local<input name="location" placeholder="Templo, sala, online..." /></label>
+      <label class="span-2">Observações<textarea name="notes" rows="2" placeholder="Equipe convocada, repertório, pauta ou instruções"></textarea></label>
+      <button class="save span-2" type="submit"><i data-lucide="calendar-plus"></i> Salvar agenda</button>
+    </form>
+  `;
+}
+
+function renderMinistryTaskForm(department) {
+  return `
+    <form class="ministry-inline-form" id="ministryTaskForm">
+      <input type="hidden" name="department" value="${escapeHtml(department)}" />
+      <label>Tarefa<input name="title" required placeholder="Ex: Revisar escala do domingo" /></label>
+      <label>Responsável<input name="owner" placeholder="Nome ou função" /></label>
+      <label>Prazo<input name="dueDate" type="date" /></label>
+      <label>Prioridade<select name="priority"><option>Normal</option><option>Alta</option><option>Baixa</option></select></label>
+      <label class="span-2">Observações<textarea name="notes" rows="2"></textarea></label>
+      <button class="save span-2" type="submit"><i data-lucide="list-plus"></i> Criar tarefa</button>
+    </form>
+  `;
+}
+
+function ministryManagementHint(department) {
+  const hints = {
+    Louvor: "Ensaios, repertório, escalas de culto, equipe vocal, instrumental e som.",
+    Diaconato: "Escalas de culto, apoio de ceia, ordem do templo, recepção e cuidado prático.",
+    Tesouraria: "Responsáveis, rotinas de conferência, prestação de contas e tarefas financeiras.",
+    Secretaria: "Cadastro, documentos, atendimento, certificados e organização administrativa.",
+    Kids: "Equipe infantil, check-in, professores, salas, escalas e treinamentos.",
+    "Mídia": "Transmissão, projeção, fotografia, design, social media e agenda técnica."
+  };
+  return hints[department] || "Equipe, agenda própria, reuniões, tarefas e rotinas de gestão do departamento.";
+}
+
+function ministryPermissionHints(department) {
+  const base = [
+    { title: "Membros", description: "Consultar equipe, função e dados de contato vinculados ao departamento." },
+    { title: "Eventos", description: "Criar agendas públicas quando a atividade precisar aparecer para a igreja." },
+    { title: "Comunicados", description: "Enviar avisos e convocações para equipe ou igreja." }
+  ];
+  if (department === "Tesouraria") return [{ title: "Financeiro", description: "Acesso restrito a lançamentos, relatórios e prestação de contas." }, ...base];
+  if (department === "Secretaria") return [{ title: "Acessos", description: "Apoio no controle administrativo conforme autorização do master." }, ...base];
+  if (department === "Kids") return [{ title: "Kids", description: "Check-in, crianças, responsáveis e rotinas de segurança." }, ...base];
+  return base;
+}
+
 function openEventDetail(eventId) {
   const event = (state.events || []).find((item) => item.id === eventId);
   const modal = document.querySelector("#eventDetailModal");
@@ -3455,6 +3691,7 @@ function renderAll() {
   renderChurches();
   renderMembers();
   renderPastoral();
+  renderMinistries();
   renderEvents();
   renderMessages();
   renderFinance();
@@ -3976,6 +4213,64 @@ document.querySelector("#eventForm")?.addEventListener("submit", (event) => {
   renderAll();
 });
 
+document.addEventListener("submit", (event) => {
+  const form = event.target;
+  if (!(form instanceof HTMLFormElement)) return;
+  if (!["ministryTeamForm", "ministryActivityForm", "ministryTaskForm"].includes(form.id)) return;
+  event.preventDefault();
+  if (!canManage("ministries")) return;
+  const data = formData(form);
+  const department = data.department || activeMinistryDepartment;
+
+  if (form.id === "ministryTeamForm") {
+    const member = (state.members || []).find((item) => item.id === data.memberId);
+    if (!member) {
+      showAppToast("Selecione um membro interno para adicionar à equipe.", "warning");
+      return;
+    }
+    member.department = department;
+    member.ministryRole = data.ministryRole || member.ministryRole || "";
+    member.updatedAt = new Date().toISOString();
+    showAppToast("Integrante adicionado ao departamento.");
+  }
+
+  if (form.id === "ministryActivityForm") {
+    state.ministryActivities.unshift({
+      id: crypto.randomUUID(),
+      department,
+      type: data.type || "Reunião",
+      title: data.title,
+      date: data.date || "",
+      time: data.time || "",
+      location: data.location || "",
+      notes: data.notes || "",
+      audience: "Equipe do departamento",
+      createdAt: new Date().toISOString()
+    });
+    showAppToast("Agenda do departamento salva.");
+  }
+
+  if (form.id === "ministryTaskForm") {
+    state.ministryTasks.unshift({
+      id: crypto.randomUUID(),
+      department,
+      title: data.title,
+      owner: data.owner || "",
+      dueDate: data.dueDate || "",
+      priority: data.priority || "Normal",
+      notes: data.notes || "",
+      done: false,
+      createdAt: new Date().toISOString()
+    });
+    showAppToast("Tarefa criada para o departamento.");
+  }
+
+  saveState();
+  form.reset();
+  activeMinistryDepartment = department;
+  renderAll();
+});
+
 document.querySelector("#prayerRequestForm")?.addEventListener("submit", (event) => {
   event.preventDefault();
   if (!hasPermission("pastoral")) return;
@@ -4136,6 +4431,11 @@ document.querySelector("#financeReportFilterForm")?.addEventListener("input", ()
 
 document.querySelector("#eventSearchInput")?.addEventListener("input", () => {
   renderEvents();
+  if (window.lucide) window.lucide.createIcons();
+});
+
+document.querySelector("#ministrySearchInput")?.addEventListener("input", () => {
+  renderMinistries();
   if (window.lucide) window.lucide.createIcons();
 });
 
@@ -4379,6 +4679,67 @@ document.addEventListener("click", (event) => {
   const detailEvent = event.target.closest("[data-detail-event]");
   if (detailEvent && !event.target.closest("button")) {
     openEventDetail(detailEvent.dataset.detailEvent);
+  }
+
+  const ministryDepartmentButton = event.target.closest("[data-ministry-department]");
+  if (ministryDepartmentButton) {
+    activeMinistryDepartment = ministryDepartmentButton.dataset.ministryDepartment || activeMinistryDepartment;
+    renderMinistries();
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  const ministryJump = event.target.closest("[data-jump-ministry-form]");
+  if (ministryJump) {
+    const target = ministryJump.dataset.jumpMinistryForm;
+    const form = target === "team" ? "#ministryTeamForm" : target === "activity" ? "#ministryActivityForm" : "#ministryTaskForm";
+    document.querySelector(form)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    document.querySelector(`${form} input, ${form} select, ${form} textarea`)?.focus();
+  }
+
+  if (event.target.closest("#openMinistryActivityButton") && canManage("ministries")) {
+    document.querySelector("#ministryActivityForm")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    document.querySelector("#ministryActivityForm input[name='title']")?.focus();
+  }
+
+  const removeMinistryMember = event.target.closest("[data-remove-ministry-member]");
+  if (removeMinistryMember && canManage("ministries")) {
+    const member = (state.members || []).find((item) => item.id === removeMinistryMember.dataset.removeMinistryMember);
+    if (member) {
+      member.department = "";
+      member.ministryRole = "";
+      member.isLeader = false;
+      member.updatedAt = new Date().toISOString();
+      saveState();
+      renderAll();
+      showAppToast("Integrante removido da equipe.");
+    }
+  }
+
+  const removeMinistryActivity = event.target.closest("[data-remove-ministry-activity]");
+  if (removeMinistryActivity && canManage("ministries")) {
+    state.ministryActivities = (state.ministryActivities || []).filter((item) => item.id !== removeMinistryActivity.dataset.removeMinistryActivity);
+    saveState();
+    renderAll();
+    showAppToast("Agenda removida.");
+  }
+
+  const toggleMinistryTask = event.target.closest("[data-toggle-ministry-task]");
+  if (toggleMinistryTask && canManage("ministries")) {
+    const task = (state.ministryTasks || []).find((item) => item.id === toggleMinistryTask.dataset.toggleMinistryTask);
+    if (task) {
+      task.done = !task.done;
+      task.updatedAt = new Date().toISOString();
+      saveState();
+      renderAll();
+    }
+  }
+
+  const removeMinistryTask = event.target.closest("[data-remove-ministry-task]");
+  if (removeMinistryTask && canManage("ministries")) {
+    state.ministryTasks = (state.ministryTasks || []).filter((item) => item.id !== removeMinistryTask.dataset.removeMinistryTask);
+    saveState();
+    renderAll();
+    showAppToast("Tarefa removida.");
   }
 
   const toggleUser = event.target.closest("[data-toggle-user]");

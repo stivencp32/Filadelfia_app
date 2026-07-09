@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Admin Igreja</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260709-event-date-filter-1" />
+    <link rel="stylesheet" href="./styles.css?v=20260709-ministries-1" />
     <script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -13,7 +13,7 @@
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script defer src="./app-config.js?v=20260630-26"></script>
     <script defer src="./supabase.config.js?v=20260630-27"></script>
-    <script defer src="./app.js?v=20260709-event-date-filter-1"></script>
+    <script defer src="./app.js?v=20260709-ministries-1"></script>
   </head>
   <body class="is-auth-screen">
     <div class="app-toast" id="appToast" role="status" aria-live="polite" hidden></div>
@@ -573,8 +573,21 @@
 
           <section class="view" id="ministries">
             <div class="panel">
-              <h2>Ministérios</h2>
-              <div class="empty-state"><i data-lucide="grid-3x3"></i><strong>Nenhum ministério criado</strong><span>Depois entraremos com escalas, equipes e permissões por ministério.</span></div>
+              <div class="panel-title-row">
+                <h2>Ministérios</h2>
+                <button class="outline" id="openMinistryActivityButton" type="button"><i data-lucide="calendar-plus"></i> Nova agenda</button>
+              </div>
+              <div class="permission-notice" id="ministriesReadOnlyNotice" hidden>
+                <i data-lucide="eye"></i>
+                Você pode acompanhar os departamentos. Para gerir equipes, agenda e tarefas, solicite permissão de Ministérios.
+              </div>
+              <div class="ministry-dashboard">
+                <aside class="ministry-sidebar">
+                  <label class="event-search"><i data-lucide="search"></i><input id="ministrySearchInput" type="search" placeholder="Buscar departamento..." /></label>
+                  <div class="ministry-department-list" id="ministryDepartmentList"></div>
+                </aside>
+                <section class="ministry-workspace" id="ministryWorkspace"></section>
+              </div>
             </div>
           </section>
 
