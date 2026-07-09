@@ -764,6 +764,68 @@ function stateEventToDb(event) {
   };
 }
 
+function dbMinistryActivityToState(row) {
+  return {
+    id: row.id,
+    department: row.department || "",
+    type: row.type || "Reunião",
+    title: row.title || "",
+    date: row.activity_date || "",
+    time: row.activity_time || "",
+    locationChurchId: row.location_church_unit_id || "",
+    location: row.location || "",
+    audience: row.audience || "Equipe do departamento",
+    notes: row.notes || "",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function stateMinistryActivityToDb(activity) {
+  return {
+    id: activity.id,
+    organization_id: activeOrganizationId,
+    department: activity.department,
+    type: activity.type || "Reunião",
+    title: activity.title,
+    activity_date: activity.date || null,
+    activity_time: activity.time || null,
+    location_church_unit_id: activity.locationChurchId && activity.locationChurchId !== "custom" ? activity.locationChurchId : null,
+    location: activity.location || null,
+    audience: activity.audience || "Equipe do departamento",
+    notes: activity.notes || null
+  };
+}
+
+function dbMinistryTaskToState(row) {
+  return {
+    id: row.id,
+    department: row.department || "",
+    title: row.title || "",
+    owner: row.owner || "",
+    dueDate: row.due_date || "",
+    priority: row.priority || "Normal",
+    notes: row.notes || "",
+    done: row.done === true,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function stateMinistryTaskToDb(task) {
+  return {
+    id: task.id,
+    organization_id: activeOrganizationId,
+    department: task.department,
+    title: task.title,
+    owner: task.owner || null,
+    due_date: task.dueDate || null,
+    priority: task.priority || "Normal",
+    notes: task.notes || null,
+    done: task.done === true
+  };
+}
+
 function dbPastoralToState(row) {
   return {
     id: row.id,
@@ -909,14 +971,16 @@ async function loadSupabaseState() {
     }
 
     if (isAuthenticated) {
-      const [usersResult, invitesResult, membersResult, pastoralResult, financeResult] = await Promise.all([
+      const [usersResult, invitesResult, membersResult, pastoralResult, financeResult, ministryActivitiesResult, ministryTasksResult] = await Promise.all([
         client.from("app_users").select("*").eq("organization_id", organizationId).order("created_at", { ascending: false }),
         client.from("admin_invites").select("*").eq("organization_id", organizationId).order("created_at", { ascending: false }),
         client.from("members").select("*").eq("organization_id", organizationId).order("created_at", { ascending: false }),
         client.from("pastoral_requests").select("*").eq("organization_id", organizationId).order("created_at", { ascending: false }),
-        client.from("financial_entries").select("*").eq("organization_id", organizationId).order("date", { ascending: false })
+        client.from("financial_entries").select("*").eq("organization_id", organizationId).order("date", { ascending: false }),
+        client.from("ministry_activities").select("*").eq("organization_id", organizationId).order("activity_date", { ascending: true }),
+        client.from("ministry_tasks").select("*").eq("organization_id", organizationId).order("due_date", { ascending: true })
       ]);
-      [usersResult, invitesResult, membersResult, pastoralResult, financeResult].forEach(ignoreSupabaseError);
+      [usersResult, invitesResult, membersResult, pastoralResult, financeResult, ministryActivitiesResult, ministryTasksResult].forEach(ignoreSupabaseError);
 
       const allMembers = (membersResult.data || []).map(dbMemberToState);
       next.users = (usersResult.data || []).map(dbUserToState);
@@ -925,6 +989,8 @@ async function loadSupabaseState() {
       next.publicMembers = allMembers.filter((member) => member.accessType === "public");
       next.pastoralRequests = (pastoralResult.data || []).map(dbPastoralToState);
       next.financialEntries = (financeResult.data || []).map(dbFinanceToState);
+      next.ministryActivities = (ministryActivitiesResult.data || []).map(dbMinistryActivityToState);
+      next.ministryTasks = (ministryTasksResult.data || []).map(dbMinistryTaskToState);
 
       const authUser = sessionData.session.user;
       const appUser = next.users.find((user) => user.authUserId === authUser.id || String(user.email).toLowerCase() === String(authUser.email).toLowerCase());
@@ -1126,6 +1192,8 @@ async function saveSupabaseState() {
       ...(state.publicMembers || []).map((member) => stateMemberToDb(member, "public_link"))
     ]);
     await upsertRows("events", (state.events || []).map(stateEventToDb));
+    await upsertRows("ministry_activities", (state.ministryActivities || []).map(stateMinistryActivityToDb));
+    await upsertRows("ministry_tasks", (state.ministryTasks || []).map(stateMinistryTaskToDb));
     await upsertRows("pastoral_requests", (state.pastoralRequests || []).map(statePastoralToDb));
     await upsertRows("financial_entries", (state.financialEntries || []).map(stateFinanceToDb));
     await upsertRows("messages", (state.messages || []).map(stateMessageToDb));
@@ -4742,6 +4810,7 @@ document.addEventListener("click", (event) => {
   const removeMinistryActivity = event.target.closest("[data-remove-ministry-activity]");
   if (removeMinistryActivity && canManage("ministries")) {
     state.ministryActivities = (state.ministryActivities || []).filter((item) => item.id !== removeMinistryActivity.dataset.removeMinistryActivity);
+    deleteSupabaseRow("ministry_activities", removeMinistryActivity.dataset.removeMinistryActivity);
     saveState();
     renderAll();
     showAppToast("Agenda removida.");
@@ -4761,6 +4830,7 @@ document.addEventListener("click", (event) => {
   const removeMinistryTask = event.target.closest("[data-remove-ministry-task]");
   if (removeMinistryTask && canManage("ministries")) {
     state.ministryTasks = (state.ministryTasks || []).filter((item) => item.id !== removeMinistryTask.dataset.removeMinistryTask);
+    deleteSupabaseRow("ministry_tasks", removeMinistryTask.dataset.removeMinistryTask);
     saveState();
     renderAll();
     showAppToast("Tarefa removida.");
