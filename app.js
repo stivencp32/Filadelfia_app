@@ -2701,20 +2701,30 @@ function renderEvents() {
   });
 
   const search = String(document.querySelector("#eventSearchInput")?.value || "").trim().toLowerCase();
-  const filtered = events.filter((event) => eventMatchesFilter(event, eventFilter, search));
+  const startDate = document.querySelector("#eventStartDateFilter")?.value || "";
+  const endDate = document.querySelector("#eventEndDateFilter")?.value || "";
+  const filtered = events.filter((event) => eventMatchesFilter(event, eventFilter, search, startDate, endDate));
   empty.hidden = filtered.length > 0;
   list.innerHTML = renderEventAgenda(filtered, mayManage);
 }
 
-function eventMatchesFilter(event, filter, search) {
+function eventMatchesFilter(event, filter, search, startDate = "", endDate = "") {
   if (filter === "upcoming" && !isUpcomingEvent(event)) return false;
   if (filter === "open" && event.registrationStatus !== "open") return false;
   if (filter === "past" && !isPastEvent(event)) return false;
+  if ((startDate || endDate) && !eventMatchesDateRange(event, startDate, endDate)) return false;
   if (!search) return true;
   return [event.title, event.type, event.department, event.location, event.audience, event.owner, event.description, event.status]
     .join(" ")
     .toLowerCase()
     .includes(search);
+}
+
+function eventMatchesDateRange(event, startDate = "", endDate = "") {
+  if (!event.startDate) return false;
+  if (startDate && event.startDate < startDate) return false;
+  if (endDate && event.startDate > endDate) return false;
+  return true;
 }
 
 function isUpcomingEvent(event) {
@@ -4125,6 +4135,20 @@ document.querySelector("#financeReportFilterForm")?.addEventListener("input", ()
 });
 
 document.querySelector("#eventSearchInput")?.addEventListener("input", () => {
+  renderEvents();
+  if (window.lucide) window.lucide.createIcons();
+});
+
+document.querySelectorAll("#eventStartDateFilter, #eventEndDateFilter").forEach((field) => {
+  field.addEventListener("input", () => {
+    renderEvents();
+    if (window.lucide) window.lucide.createIcons();
+  });
+});
+
+document.querySelector("#clearEventDateFilter")?.addEventListener("click", () => {
+  setValue("#eventStartDateFilter", "");
+  setValue("#eventEndDateFilter", "");
   renderEvents();
   if (window.lucide) window.lucide.createIcons();
 });

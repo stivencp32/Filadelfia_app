@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Admin Igreja</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260709-mobile-tables-1" />
+    <link rel="stylesheet" href="./styles.css?v=20260709-event-date-filter-1" />
     <script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -13,7 +13,7 @@
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script defer src="./app-config.js?v=20260630-26"></script>
     <script defer src="./supabase.config.js?v=20260630-27"></script>
-    <script defer src="./app.js?v=20260709-mobile-tables-1"></script>
+    <script defer src="./app.js?v=20260709-event-date-filter-1"></script>
   </head>
   <body class="is-auth-screen">
     <div class="app-toast" id="appToast" role="status" aria-live="polite" hidden></div>
@@ -601,6 +601,11 @@
                   <button type="button" data-event-filter="upcoming">Próximos</button>
                   <button type="button" data-event-filter="open">Inscrições abertas</button>
                   <button type="button" data-event-filter="past">Realizados</button>
+                </div>
+                <div class="event-date-filter" aria-label="Período dos eventos">
+                  <label>De<input id="eventStartDateFilter" type="date" /></label>
+                  <label>Até<input id="eventEndDateFilter" type="date" /></label>
+                  <button class="outline" id="clearEventDateFilter" type="button"><i data-lucide="rotate-ccw"></i> Limpar</button>
                 </div>
                 <label class="event-search"><i data-lucide="search"></i><input id="eventSearchInput" type="search" placeholder="Buscar evento, local ou público..." /></label>
               </div>
