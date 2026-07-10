@@ -3019,11 +3019,6 @@ function renderMinistryWorkspace(department, mayManage) {
         <h3>${escapeHtml(department)}</h3>
         <span>${escapeHtml(ministryManagementHint(department))}</span>
       </div>
-      <div class="ministry-hero-actions">
-        <button class="outline" type="button" data-jump-ministry-form="team" ${mayManage ? "" : "hidden"}><i data-lucide="user-plus"></i> Equipe</button>
-        <button class="outline" type="button" data-jump-ministry-form="activity" ${mayManage ? "" : "hidden"}><i data-lucide="calendar-plus"></i> Agenda</button>
-        <button class="outline" type="button" data-jump-ministry-form="task" ${mayManage ? "" : "hidden"}><i data-lucide="list-checks"></i> Tarefa</button>
-      </div>
     </div>
     <div class="ministry-stat-grid">
       <article><strong>${team.length}</strong><span>Equipe</span></article>
@@ -3033,8 +3028,13 @@ function renderMinistryWorkspace(department, mayManage) {
     </div>
     <div class="ministry-grid">
       <section class="ministry-section">
-        <header><h3>Equipe</h3><span class="ministry-status-pill">${escapeHtml(department)}</span></header>
-        ${mayManage ? renderMinistryTeamForm(department) : ""}
+        <header>
+          <h3>Equipe</h3>
+          <div class="ministry-section-actions">
+            <span class="ministry-status-pill">${escapeHtml(department)}</span>
+            <button class="icon-button compact-action" type="button" title="Adicionar integrante" aria-label="Adicionar integrante" data-open-ministry-form="team" ${mayManage ? "" : "hidden"}><i data-lucide="user-plus"></i></button>
+          </div>
+        </header>
         <div class="ministry-list">
           ${team.length ? team.map((member) => `
             <article class="ministry-list-item">
@@ -3049,8 +3049,13 @@ function renderMinistryWorkspace(department, mayManage) {
         </div>
       </section>
       <section class="ministry-section">
-        <header><h3>Agenda interna</h3><span class="ministry-status-pill">${upcomingActivities.length} futuras</span></header>
-        ${mayManage ? renderMinistryActivityForm(department) : ""}
+        <header>
+          <h3>Agenda interna</h3>
+          <div class="ministry-section-actions">
+            <span class="ministry-status-pill">${upcomingActivities.length} futuras</span>
+            <button class="icon-button compact-action" type="button" title="Nova agenda" aria-label="Nova agenda" data-open-ministry-form="activity" ${mayManage ? "" : "hidden"}><i data-lucide="calendar-plus"></i></button>
+          </div>
+        </header>
         <div class="ministry-list">
           ${activities.length ? activities.map((item) => `
             <article class="ministry-list-item">
@@ -3066,8 +3071,13 @@ function renderMinistryWorkspace(department, mayManage) {
         </div>
       </section>
       <section class="ministry-section">
-        <header><h3>Tarefas e gestão</h3><span class="ministry-status-pill">${openTasks.length} abertas</span></header>
-        ${mayManage ? renderMinistryTaskForm(department) : ""}
+        <header>
+          <h3>Tarefas e gestão</h3>
+          <div class="ministry-section-actions">
+            <span class="ministry-status-pill">${openTasks.length} abertas</span>
+            <button class="icon-button compact-action" type="button" title="Nova tarefa" aria-label="Nova tarefa" data-open-ministry-form="task" ${mayManage ? "" : "hidden"}><i data-lucide="list-plus"></i></button>
+          </div>
+        </header>
         <div class="ministry-list">
           ${tasks.length ? tasks.map((task) => `
             <article class="ministry-list-item">
@@ -3131,6 +3141,38 @@ function renderMinistryTaskForm(department) {
       <button class="save span-2" type="submit"><i data-lucide="list-plus"></i> Criar tarefa</button>
     </form>
   `;
+}
+
+function openMinistryFormModal(type = "activity") {
+  if (!canManage("ministries") || !canAccessMinistryDepartment(activeMinistryDepartment)) return;
+  const modal = document.querySelector("#ministryFormModal");
+  const content = document.querySelector("#ministryFormModalContent");
+  if (!modal || !content) return;
+  const titles = {
+    team: "Adicionar integrante",
+    activity: "Nova agenda interna",
+    task: "Nova tarefa"
+  };
+  const forms = {
+    team: renderMinistryTeamForm(activeMinistryDepartment),
+    activity: renderMinistryActivityForm(activeMinistryDepartment),
+    task: renderMinistryTaskForm(activeMinistryDepartment)
+  };
+  setText("#ministryFormModalTitle", titles[type] || titles.activity);
+  content.innerHTML = forms[type] || forms.activity;
+  modal.hidden = false;
+  document.body.classList.add("modal-open");
+  if (window.lucide) window.lucide.createIcons();
+  window.setTimeout(() => {
+    content.querySelector("input, select, textarea")?.focus();
+  }, 0);
+}
+
+function closeMinistryFormModal() {
+  const modal = document.querySelector("#ministryFormModal");
+  if (!modal) return;
+  modal.hidden = true;
+  document.body.classList.remove("modal-open");
 }
 
 function ministryManagementHint(department) {
@@ -4407,6 +4449,7 @@ document.addEventListener("submit", (event) => {
   saveState();
   form.reset();
   activeMinistryDepartment = department;
+  closeMinistryFormModal();
   renderAll();
 });
 
@@ -4821,6 +4864,10 @@ document.addEventListener("click", (event) => {
 
   if (event.target.id === "memberModal") closeMemberModal();
 
+  if (event.target.closest("#closeMinistryFormButton")) closeMinistryFormModal();
+
+  if (event.target.id === "ministryFormModal") closeMinistryFormModal();
+
   const copyButton = event.target.closest("[data-copy]");
   if (copyButton) copyText(copyButton.dataset.copy);
 
@@ -4847,17 +4894,13 @@ document.addEventListener("click", (event) => {
     }
   }
 
-  const ministryJump = event.target.closest("[data-jump-ministry-form]");
-  if (ministryJump) {
-    const target = ministryJump.dataset.jumpMinistryForm;
-    const form = target === "team" ? "#ministryTeamForm" : target === "activity" ? "#ministryActivityForm" : "#ministryTaskForm";
-    document.querySelector(form)?.scrollIntoView({ behavior: "smooth", block: "center" });
-    document.querySelector(`${form} input, ${form} select, ${form} textarea`)?.focus();
+  const ministryFormButton = event.target.closest("[data-open-ministry-form]");
+  if (ministryFormButton) {
+    openMinistryFormModal(ministryFormButton.dataset.openMinistryForm || "activity");
   }
 
   if (event.target.closest("#openMinistryActivityButton") && canManage("ministries")) {
-    document.querySelector("#ministryActivityForm")?.scrollIntoView({ behavior: "smooth", block: "center" });
-    document.querySelector("#ministryActivityForm input[name='title']")?.focus();
+    openMinistryFormModal("activity");
   }
 
   const removeMinistryMember = event.target.closest("[data-remove-ministry-member]");
@@ -5190,6 +5233,7 @@ document.addEventListener("keydown", (event) => {
     closePrayerModal();
     closeChurchModal();
     closeEventModal();
+    closeMinistryFormModal();
     closeFinanceModal();
     closeFinanceReportsModal();
   }

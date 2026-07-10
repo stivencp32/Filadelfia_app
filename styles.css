@@ -4144,6 +4144,22 @@ td small,
   margin-bottom: 12px;
 }
 
+.ministry-section-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.compact-action {
+  width: 38px;
+  height: 38px;
+  border: 1px solid #b9e8c7;
+  background: #f4fff7;
+  color: var(--green);
+}
+
 .ministry-list {
   display: grid;
   gap: 8px;
@@ -4203,6 +4219,14 @@ td small,
 
 .ministry-inline-form button {
   justify-content: center;
+}
+
+.ministry-form-modal {
+  width: min(720px, 96vw);
+}
+
+.ministry-form-modal .ministry-inline-form {
+  margin-bottom: 0;
 }
 
 .event-list {
@@ -4775,6 +4799,14 @@ body.modal-open {
 
   .ministry-hero-actions {
     justify-content: stretch;
+  }
+
+  .ministry-section header {
+    align-items: flex-start;
+  }
+
+  .ministry-section-actions {
+    justify-content: flex-start;
   }
 
   .ministry-hero-actions button,
