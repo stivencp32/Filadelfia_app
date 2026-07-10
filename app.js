@@ -4613,11 +4613,19 @@ document.querySelector("#memberForm")?.addEventListener("submit", async (event) 
   if (photo) data.photo = photo;
   delete data.photoFile;
   const hasMemberCoords = Number.isFinite(parseCoordinate(data.lat)) && Number.isFinite(parseCoordinate(data.lng));
+  let memberGeocodeSkipped = false;
   if (!hasMemberCoords && data.address && data.city && data.state) {
-    const geocoded = await geocodeMemberAddress(data);
-    if (geocoded.ok) {
-      data.lat = geocoded.lat;
-      data.lng = geocoded.lng;
+    try {
+      const geocoded = await geocodeMemberAddress(data);
+      if (geocoded.ok) {
+        data.lat = geocoded.lat;
+        data.lng = geocoded.lng;
+      } else {
+        memberGeocodeSkipped = true;
+      }
+    } catch (error) {
+      console.warn("Member geocode skipped:", error.message);
+      memberGeocodeSkipped = true;
     }
   }
   let existingIndex = state.members.findIndex((member) => member.id && member.id === data.id);
@@ -4650,7 +4658,7 @@ document.querySelector("#memberForm")?.addEventListener("submit", async (event) 
   if (saveResult.supabase === false) {
     showAppToast(`Membro salvo só neste navegador. Supabase não gravou: ${saveResult.error?.message || "erro sem detalhe"}`, "error");
   } else {
-    showAppToast("Membro salvo.");
+    showAppToast(memberGeocodeSkipped ? "Membro salvo. O endereço ficou sem ponto no mapa por enquanto." : "Membro salvo.");
   }
 });
 
