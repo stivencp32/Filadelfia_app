@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Admin Igreja</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260710-bible-mode-1" />
+    <link rel="stylesheet" href="./styles.css?v=20260710-kids-screen-1" />
     <script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -13,7 +13,7 @@
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script defer src="./app-config.js?v=20260630-26"></script>
     <script defer src="./supabase.config.js?v=20260630-27"></script>
-    <script defer src="./app.js?v=20260710-bible-mode-1"></script>
+    <script defer src="./app.js?v=20260710-kids-screen-1"></script>
   </head>
   <body class="is-auth-screen">
     <div class="app-toast" id="appToast" role="status" aria-live="polite" hidden></div>
@@ -697,9 +697,57 @@
           </section>
 
           <section class="view" id="kids">
-            <div class="panel">
-              <h2>Kids</h2>
-              <div class="empty-state"><i data-lucide="baby"></i><strong>Nenhum ambiente kids configurado</strong><span>Vamos criar salas, responsáveis, check-in e check-out quando avançarmos nesta seção.</span></div>
+            <div class="page-title"><span>Kids</span></div>
+            <div class="panel kids-panel">
+              <div class="panel-title-row">
+                <div>
+                  <h2>Kids</h2>
+                  <p class="muted-text">Cadastro das crianças, responsáveis e controle de entrada e saída do dia.</p>
+                </div>
+              </div>
+              <div class="kids-summary">
+                <article><span>Crianças</span><strong id="kidsTotalCount">0</strong></article>
+                <article><span>Presentes hoje</span><strong id="kidsPresentCount">0</strong></article>
+                <article><span>Check-outs pendentes</span><strong id="kidsPendingCheckoutCount">0</strong></article>
+                <article><span>Responsáveis</span><strong id="kidsResponsibleCount">0</strong></article>
+              </div>
+              <div class="kids-layout">
+                <form id="kidsChildForm" class="kids-card kids-child-form">
+                  <input type="hidden" name="id" id="kidsChildId" />
+                  <h3>Cadastrar criança</h3>
+                  <div class="form-layout">
+                    <label>Nome da criança<input name="name" required placeholder="Ex.: Ana Clara" /></label>
+                    <label>Nascimento<input name="birthDate" type="date" /></label>
+                    <label>Responsável<input name="responsibleName" placeholder="Nome do responsável" /></label>
+                    <label>Contato<input name="responsiblePhone" placeholder="Telefone ou WhatsApp" /></label>
+                    <label class="span-2">Observações<textarea name="notes" rows="4" placeholder="Alergias, restrições, autorização, observações da família"></textarea></label>
+                  </div>
+                  <footer class="modal-actions">
+                    <button class="save" type="submit"><i data-lucide="baby"></i> Salvar criança</button>
+                    <button class="outline" type="button" data-clear-form="kidsChildForm"><i data-lucide="eraser"></i> Limpar</button>
+                  </footer>
+                </form>
+                <div class="kids-card kids-checkin-card">
+                  <div class="kids-card-header">
+                    <div>
+                      <h3>Check-in de hoje</h3>
+                      <span id="kidsTodayLabel">Hoje</span>
+                    </div>
+                    <i data-lucide="clipboard-check"></i>
+                  </div>
+                  <label class="kids-search">Buscar criança<input id="kidsSearchInput" placeholder="Nome ou responsável" /></label>
+                  <div class="kids-checkin-list" id="kidsCheckinList"></div>
+                </div>
+              </div>
+              <div class="kids-card">
+                <div class="kids-card-header">
+                  <div>
+                    <h3>Crianças cadastradas</h3>
+                    <span>Dados usados pela equipe Kids no atendimento e segurança.</span>
+                  </div>
+                </div>
+                <div class="kids-children-list" id="kidsChildrenList"></div>
+              </div>
             </div>
           </section>
 

@@ -260,6 +260,8 @@ const defaultState = {
   financialEntries: [],
   ministryActivities: [],
   ministryTasks: [],
+  kidsChildren: [],
+  kidsCheckins: [],
   messages: []
 };
 
@@ -324,6 +326,8 @@ function hydrateState(saved = {}) {
     financialEntries: saved.financialEntries || [],
     ministryActivities: saved.ministryActivities || [],
     ministryTasks: saved.ministryTasks || [],
+    kidsChildren: saved.kidsChildren || [],
+    kidsCheckins: saved.kidsCheckins || [],
     messages: saved.messages || []
   };
 
@@ -403,6 +407,8 @@ function stateHasData(value) {
     value?.financialEntries?.length ||
     value?.ministryActivities?.length ||
     value?.ministryTasks?.length ||
+    value?.kidsChildren?.length ||
+    value?.kidsCheckins?.length ||
     value?.messages?.length
   );
 }
@@ -439,6 +445,8 @@ function mergeSyncedState(local, remote) {
     financialEntries: mergeList(local.financialEntries, remote.financialEntries, ["id", "createdAt"]),
     ministryActivities: mergeList(local.ministryActivities, remote.ministryActivities, ["id", "createdAt"]),
     ministryTasks: mergeList(local.ministryTasks, remote.ministryTasks, ["id", "createdAt"]),
+    kidsChildren: mergeList(local.kidsChildren, remote.kidsChildren, ["id", "name", "createdAt"]),
+    kidsCheckins: mergeList(local.kidsCheckins, remote.kidsCheckins, ["id", "childId", "checkinAt"]),
     messages: mergeList(local.messages, remote.messages, ["id", "createdAt"])
   });
   return next;
@@ -1009,6 +1017,59 @@ function stateFinanceToDb(entry) {
   };
 }
 
+function dbKidChildToState(row) {
+  return {
+    id: row.id,
+    memberId: row.member_id || "",
+    name: row.name || "",
+    birthDate: row.birth_date || "",
+    responsibleName: row.responsible_name || "",
+    responsiblePhone: row.responsible_phone || "",
+    notes: row.notes || "",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+function stateKidChildToDb(child) {
+  return {
+    id: child.id || crypto.randomUUID(),
+    organization_id: activeOrganizationId,
+    member_id: child.memberId || null,
+    name: child.name,
+    birth_date: child.birthDate || null,
+    responsible_name: child.responsibleName || null,
+    responsible_phone: child.responsiblePhone || null,
+    notes: child.notes || null
+  };
+}
+
+function dbKidCheckinToState(row) {
+  return {
+    id: row.id,
+    childId: row.child_id,
+    eventId: row.event_id || "",
+    checkedInBy: row.checked_in_by || "",
+    checkedOutBy: row.checked_out_by || "",
+    checkinAt: row.checkin_at,
+    checkoutAt: row.checkout_at || "",
+    notes: row.notes || ""
+  };
+}
+
+function stateKidCheckinToDb(checkin) {
+  return {
+    id: checkin.id || crypto.randomUUID(),
+    child_id: checkin.childId,
+    event_id: checkin.eventId || null,
+    checked_in_by: checkin.checkedInBy || null,
+    checked_out_by: checkin.checkedOutBy || null,
+    checkin_at: checkin.checkinAt || new Date().toISOString(),
+    checkout_at: checkin.checkoutAt || null,
+    notes: checkin.notes || null
+  };
+}
+
 function dbMessageToState(row) {
   return {
     id: row.id,
@@ -1078,16 +1139,18 @@ async function loadSupabaseState() {
     }
 
     if (isAuthenticated) {
-      const [usersResult, invitesResult, membersResult, pastoralResult, financeResult, ministryActivitiesResult, ministryTasksResult] = await Promise.all([
+      const [usersResult, invitesResult, membersResult, pastoralResult, financeResult, ministryActivitiesResult, ministryTasksResult, kidsChildrenResult, kidsCheckinsResult] = await Promise.all([
         client.from("app_users").select("*").eq("organization_id", organizationId).order("created_at", { ascending: false }),
         client.from("admin_invites").select("*").eq("organization_id", organizationId).order("created_at", { ascending: false }),
         client.from("members").select("*").eq("organization_id", organizationId).order("created_at", { ascending: false }),
         client.from("pastoral_requests").select("*").eq("organization_id", organizationId).order("created_at", { ascending: false }),
         client.from("financial_entries").select("*").eq("organization_id", organizationId).order("date", { ascending: false }),
         client.from("ministry_activities").select("*").eq("organization_id", organizationId).order("activity_date", { ascending: true }),
-        client.from("ministry_tasks").select("*").eq("organization_id", organizationId).order("due_date", { ascending: true })
+        client.from("ministry_tasks").select("*").eq("organization_id", organizationId).order("due_date", { ascending: true }),
+        client.from("kids_children").select("*").eq("organization_id", organizationId).order("name", { ascending: true }),
+        client.from("kids_checkins").select("*").order("checkin_at", { ascending: false })
       ]);
-      [usersResult, invitesResult, membersResult, pastoralResult, financeResult, ministryActivitiesResult, ministryTasksResult].forEach(ignoreSupabaseError);
+      [usersResult, invitesResult, membersResult, pastoralResult, financeResult, ministryActivitiesResult, ministryTasksResult, kidsChildrenResult, kidsCheckinsResult].forEach(ignoreSupabaseError);
 
       const allMembers = (membersResult.data || []).map(dbMemberToState);
       next.users = (usersResult.data || []).map(dbUserToState);
@@ -1098,6 +1161,9 @@ async function loadSupabaseState() {
       next.financialEntries = (financeResult.data || []).map(dbFinanceToState);
       next.ministryActivities = (ministryActivitiesResult.data || []).map(dbMinistryActivityToState);
       next.ministryTasks = (ministryTasksResult.data || []).map(dbMinistryTaskToState);
+      next.kidsChildren = (kidsChildrenResult.data || []).map(dbKidChildToState);
+      const childIds = new Set(next.kidsChildren.map((child) => child.id));
+      next.kidsCheckins = (kidsCheckinsResult.data || []).filter((row) => childIds.has(row.child_id)).map(dbKidCheckinToState);
 
       const authUser = sessionData.session.user;
       const appUser = next.users.find((user) => user.authUserId === authUser.id || String(user.email).toLowerCase() === String(authUser.email).toLowerCase());
@@ -1379,6 +1445,8 @@ async function saveSupabaseState() {
     await upsertRows("ministry_tasks", (state.ministryTasks || []).map(stateMinistryTaskToDb));
     await upsertRows("pastoral_requests", (state.pastoralRequests || []).map(statePastoralToDb));
     await upsertRows("financial_entries", (state.financialEntries || []).map(stateFinanceToDb));
+    await upsertRows("kids_children", (state.kidsChildren || []).map(stateKidChildToDb));
+    await upsertRows("kids_checkins", (state.kidsCheckins || []).map(stateKidCheckinToDb));
     await upsertRows("messages", (state.messages || []).map(stateMessageToDb));
     return true;
   } catch (error) {
@@ -2711,6 +2779,100 @@ function renderMessages() {
       <button class="table-action" data-remove-message="${index}" type="button">Remover</button>
     </div>
   `).join("");
+}
+
+function todayKey(value = new Date()) {
+  return value.toISOString().slice(0, 10);
+}
+
+function kidOpenCheckin(childId) {
+  const today = todayKey();
+  return (state.kidsCheckins || []).find((checkin) => checkin.childId === childId && String(checkin.checkinAt || "").slice(0, 10) === today && !checkin.checkoutAt);
+}
+
+function kidLatestCheckin(childId) {
+  return [...(state.kidsCheckins || [])]
+    .filter((checkin) => checkin.childId === childId)
+    .sort((a, b) => new Date(b.checkinAt || 0) - new Date(a.checkinAt || 0))[0] || null;
+}
+
+function formatTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function kidsFilteredChildren() {
+  const query = searchKey(document.querySelector("#kidsSearchInput")?.value || "");
+  return [...(state.kidsChildren || [])]
+    .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), "pt-BR"))
+    .filter((child) => {
+      if (!query) return true;
+      return searchKey([child.name, child.responsibleName, child.responsiblePhone].filter(Boolean).join(" ")).includes(query);
+    });
+}
+
+function renderKids() {
+  const totalNode = document.querySelector("#kidsTotalCount");
+  if (!totalNode) return;
+  const children = state.kidsChildren || [];
+  const today = todayKey();
+  const todayCheckins = (state.kidsCheckins || []).filter((checkin) => String(checkin.checkinAt || "").slice(0, 10) === today);
+  const present = todayCheckins.filter((checkin) => !checkin.checkoutAt);
+  const responsibleCount = new Set(children.map((child) => searchKey(child.responsibleName)).filter(Boolean)).size;
+
+  setText("#kidsTotalCount", children.length);
+  setText("#kidsPresentCount", present.length);
+  setText("#kidsPendingCheckoutCount", present.length);
+  setText("#kidsResponsibleCount", responsibleCount);
+  setText("#kidsTodayLabel", new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit" }));
+
+  const checkinList = document.querySelector("#kidsCheckinList");
+  const childrenList = document.querySelector("#kidsChildrenList");
+  if (!checkinList || !childrenList) return;
+
+  const filtered = kidsFilteredChildren();
+  checkinList.innerHTML = filtered.length ? filtered.map((child) => {
+    const open = kidOpenCheckin(child.id);
+    const latest = kidLatestCheckin(child.id);
+    return `
+      <article class="kids-checkin-item ${open ? "is-present" : ""}">
+        <div>
+          <strong>${escapeHtml(child.name || "Criança")}</strong>
+          <span>${escapeHtml(child.responsibleName || "Responsável não informado")}${child.responsiblePhone ? ` • ${escapeHtml(child.responsiblePhone)}` : ""}</span>
+          <small>${open ? `Entrada hoje às ${escapeHtml(formatTime(open.checkinAt))}` : latest ? `Último registro: ${escapeHtml(formatDate(latest.checkinAt))}` : "Sem check-in registrado"}</small>
+        </div>
+        ${open
+          ? `<button class="outline" data-kids-checkout="${escapeHtml(open.id)}" type="button"><i data-lucide="log-out"></i> Check-out</button>`
+          : `<button class="save" data-kids-checkin="${escapeHtml(child.id)}" type="button"><i data-lucide="log-in"></i> Check-in</button>`}
+      </article>
+    `;
+  }).join("") : `
+    <div class="empty-state compact"><i data-lucide="baby"></i><strong>Nenhuma criança encontrada</strong><span>Cadastre uma criança ou ajuste a busca para iniciar o check-in.</span></div>
+  `;
+
+  childrenList.innerHTML = children.length ? children.map((child) => {
+    const open = kidOpenCheckin(child.id);
+    return `
+      <article class="kids-child-card">
+        <div class="kids-child-avatar">${escapeHtml(String(child.name || "?").trim().charAt(0).toUpperCase() || "?")}</div>
+        <div>
+          <strong>${escapeHtml(child.name || "Criança")}</strong>
+          <span>${escapeHtml(ageFromBirthDate(child.birthDate))}${child.birthDate ? ` • ${escapeHtml(formatDate(child.birthDate))}` : ""}</span>
+          <small>${escapeHtml(child.responsibleName || "Responsável não informado")}${child.responsiblePhone ? ` • ${escapeHtml(child.responsiblePhone)}` : ""}</small>
+          ${child.notes ? `<p>${escapeHtml(child.notes)}</p>` : ""}
+        </div>
+        <div class="kids-child-actions">
+          <span class="kids-status ${open ? "is-present" : ""}">${open ? "Presente" : "Fora da sala"}</span>
+          <button class="table-action" data-edit-kid="${escapeHtml(child.id)}" type="button">Editar</button>
+          <button class="table-action secondary" data-remove-kid="${escapeHtml(child.id)}" type="button">Remover</button>
+        </div>
+      </article>
+    `;
+  }).join("") : `
+    <div class="empty-state compact"><i data-lucide="baby"></i><strong>Nenhuma criança cadastrada</strong><span>Use o formulário para montar a primeira lista do Kids.</span></div>
+  `;
 }
 
 function memberMapEntries() {
@@ -4634,6 +4796,7 @@ function renderAll() {
   renderMinistries();
   renderEvents();
   renderMessages();
+  renderKids();
   renderFinance();
   renderMobileApp();
   normalizeFinanceReportButtons();
@@ -5351,6 +5514,29 @@ document.querySelector("#messageForm")?.addEventListener("submit", (event) => {
   showAppToast("Comunicado publicado no app do membro.", "success");
 });
 
+document.querySelector("#kidsChildForm")?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  if (!canManage("kids")) return;
+  const data = formData(event.currentTarget);
+  const existingIndex = (state.kidsChildren || []).findIndex((child) => child.id === data.id);
+  const child = {
+    id: data.id || crypto.randomUUID(),
+    name: data.name,
+    birthDate: data.birthDate || "",
+    responsibleName: data.responsibleName || "",
+    responsiblePhone: data.responsiblePhone || "",
+    notes: data.notes || "",
+    updatedAt: new Date().toISOString()
+  };
+  if (existingIndex >= 0) state.kidsChildren[existingIndex] = { ...state.kidsChildren[existingIndex], ...child };
+  else state.kidsChildren.unshift({ ...child, createdAt: new Date().toISOString() });
+  saveState();
+  event.currentTarget.reset();
+  setValue("#kidsChildId", "");
+  renderAll();
+  showAppToast(existingIndex >= 0 ? "Cadastro Kids atualizado." : "Criança cadastrada no Kids.");
+});
+
 document.querySelector("#appSiteForm")?.addEventListener("submit", (event) => {
   event.preventDefault();
   if (!canManage("mobile")) return;
@@ -5435,6 +5621,11 @@ document.querySelector("#eventSearchInput")?.addEventListener("input", () => {
 
 document.querySelector("#ministrySearchInput")?.addEventListener("input", () => {
   renderMinistries();
+  if (window.lucide) window.lucide.createIcons();
+});
+
+document.querySelector("#kidsSearchInput")?.addEventListener("input", () => {
+  renderKids();
   if (window.lucide) window.lucide.createIcons();
 });
 
@@ -6076,6 +6267,68 @@ document.addEventListener("click", (event) => {
     renderAll();
   }
 
+  const kidsCheckin = event.target.closest("[data-kids-checkin]");
+  if (kidsCheckin && canManage("kids")) {
+    const child = (state.kidsChildren || []).find((item) => item.id === kidsCheckin.dataset.kidsCheckin);
+    if (!child) return;
+    const open = kidOpenCheckin(child.id);
+    if (open) {
+      showAppToast(`${child.name} já está com check-in aberto.`, "warning");
+      return;
+    }
+    state.kidsCheckins.unshift({
+      id: crypto.randomUUID(),
+      childId: child.id,
+      checkedInBy: currentUser()?.id || "",
+      checkinAt: new Date().toISOString(),
+      checkoutAt: "",
+      notes: ""
+    });
+    saveState();
+    renderAll();
+    showAppToast(`Check-in de ${child.name} registrado.`);
+  }
+
+  const kidsCheckout = event.target.closest("[data-kids-checkout]");
+  if (kidsCheckout && canManage("kids")) {
+    const checkin = (state.kidsCheckins || []).find((item) => item.id === kidsCheckout.dataset.kidsCheckout);
+    if (!checkin) return;
+    checkin.checkedOutBy = currentUser()?.id || "";
+    checkin.checkoutAt = new Date().toISOString();
+    saveState();
+    renderAll();
+    const child = (state.kidsChildren || []).find((item) => item.id === checkin.childId);
+    showAppToast(`Check-out${child?.name ? ` de ${child.name}` : ""} registrado.`);
+  }
+
+  const editKid = event.target.closest("[data-edit-kid]");
+  if (editKid && canManage("kids")) {
+    const child = (state.kidsChildren || []).find((item) => item.id === editKid.dataset.editKid);
+    const form = document.querySelector("#kidsChildForm");
+    if (child && form) {
+      Object.entries(child).forEach(([key, value]) => {
+        const field = form.elements[key];
+        if (field) field.value = value ?? "";
+      });
+      form.scrollIntoView({ behavior: "smooth", block: "start" });
+      form.querySelector("[name='name']")?.focus();
+    }
+  }
+
+  const removeKid = event.target.closest("[data-remove-kid]");
+  if (removeKid && canManage("kids")) {
+    const child = (state.kidsChildren || []).find((item) => item.id === removeKid.dataset.removeKid);
+    if (!child || !confirm(`Remover ${child.name} do Kids?`)) return;
+    state.kidsChildren = (state.kidsChildren || []).filter((item) => item.id !== child.id);
+    const removedCheckins = (state.kidsCheckins || []).filter((item) => item.childId === child.id);
+    state.kidsCheckins = (state.kidsCheckins || []).filter((item) => item.childId !== child.id);
+    deleteSupabaseRow("kids_children", child.id);
+    removedCheckins.forEach((checkin) => deleteSupabaseRow("kids_checkins", checkin.id));
+    saveState();
+    renderAll();
+    showAppToast("Cadastro Kids removido.");
+  }
+
   const editEvent = event.target.closest("[data-edit-event]");
   if (editEvent && canManage("events")) {
     const item = state.events.find((eventItem) => eventItem.id === editEvent.dataset.editEvent);
@@ -6137,6 +6390,7 @@ document.addEventListener("click", (event) => {
       syncEventOwnerFields();
     }
     if (clearButton.dataset.clearForm === "financeForm") renderFinanceCategoryOptions();
+    if (clearButton.dataset.clearForm === "kidsChildForm") setValue("#kidsChildId", "");
   }
 });
 
