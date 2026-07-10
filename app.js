@@ -2972,24 +2972,37 @@ function ministryMemberOptions(department = "") {
   ].join("");
 }
 
-function ministryResponsibleOptions(department = "") {
+function searchKey(value) {
+  return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function ministryResponsibleItems(department = "") {
   const normalizedDepartment = String(department || "").trim().toLowerCase();
-  const people = financePeople()
-    .filter((person) => !normalizedDepartment || String(person.department || "").trim().toLowerCase() === normalizedDepartment)
-    .concat(
-      normalizedDepartment
-        ? financePeople().filter((person) => String(person.department || "").trim().toLowerCase() !== normalizedDepartment)
-        : []
-    );
+  const allPeople = financePeople();
+  const people = [
+    ...allPeople.filter((person) => !normalizedDepartment || String(person.department || "").trim().toLowerCase() === normalizedDepartment),
+    ...(normalizedDepartment ? allPeople.filter((person) => String(person.department || "").trim().toLowerCase() !== normalizedDepartment) : [])
+  ];
   const seen = new Set();
   return people.map((person) => {
     const value = person.name || "";
     const key = `${String(value).trim().toLowerCase()}|${person.registration || ""}`;
-    if (!value || seen.has(key)) return "";
+    if (!value || seen.has(key)) return null;
     seen.add(key);
     const detail = [person.ministryRole, person.department, person.registration ? `Mat. ${person.registration}` : ""].filter(Boolean).join(" - ");
-    return `<option value="${escapeHtml(value)}" label="${escapeHtml(detail)}"></option>`;
-  }).join("");
+    return { value, detail, search: searchKey([value, detail].filter(Boolean).join(" ")) };
+  }).filter(Boolean);
+}
+
+function ministryResponsibleOptions(department = "") {
+  const items = ministryResponsibleItems(department);
+  if (!items.length) return `<div class="ministry-owner-empty">Nenhum membro cadastrado.</div>`;
+  return items.map((item) => `
+    <button type="button" data-ministry-owner-option="${escapeHtml(item.value)}" data-search="${escapeHtml(item.search)}">
+      <strong>${escapeHtml(item.value)}</strong>
+      ${item.detail ? `<span>${escapeHtml(item.detail)}</span>` : ""}
+    </button>
+  `).join("");
 }
 
 function renderMinistries() {
@@ -3150,12 +3163,21 @@ function renderMinistryActivityForm(department) {
 }
 
 function renderMinistryTaskForm(department) {
-  const listId = `ministryTaskOwnerOptions-${String(department || "all").replace(/[^a-z0-9_-]/gi, "-")}`;
   return `
     <form class="ministry-inline-form" id="ministryTaskForm">
       <input type="hidden" name="department" value="${escapeHtml(department)}" />
       <label>Tarefa<input name="title" required placeholder="Ex: Revisar escala do domingo" /></label>
-      <label>Responsável<input name="owner" list="${escapeHtml(listId)}" autocomplete="off" placeholder="Digite o nome do membro" /><datalist id="${escapeHtml(listId)}">${ministryResponsibleOptions(department)}</datalist></label>
+      <label class="ministry-owner-label">Responsável
+        <div class="ministry-owner-combobox" data-ministry-owner-box>
+          <div class="ministry-owner-control">
+            <input name="owner" data-ministry-owner-input autocomplete="off" placeholder="Digite o nome do membro" />
+            <button type="button" aria-label="Abrir lista de responsáveis" data-ministry-owner-toggle><i data-lucide="chevron-down"></i></button>
+          </div>
+          <div class="ministry-owner-menu" data-ministry-owner-menu hidden>
+            ${ministryResponsibleOptions(department)}
+          </div>
+        </div>
+      </label>
       <label>Prazo<input name="dueDate" type="date" /></label>
       <label>Prioridade<select name="priority"><option>Normal</option><option>Alta</option><option>Baixa</option></select></label>
       <label class="span-2">Observações<textarea name="notes" rows="2"></textarea></label>
@@ -4678,6 +4700,45 @@ document.querySelector("#inviteForm")?.addEventListener("change", (event) => {
   if (event.target.name === "department") renderMemberFunctionOptions("", "#inviteForm", "#adminInviteFunctionSelect");
 });
 
+function filterMinistryOwnerOptions(input) {
+  const box = input.closest("[data-ministry-owner-box]");
+  const menu = box?.querySelector("[data-ministry-owner-menu]");
+  if (!menu) return;
+  const query = searchKey(input.value);
+  let visibleCount = 0;
+  menu.querySelectorAll("[data-ministry-owner-option]").forEach((option) => {
+    const isVisible = !query || String(option.dataset.search || "").includes(query);
+    option.hidden = !isVisible;
+    if (isVisible) visibleCount += 1;
+  });
+  menu.querySelector(".ministry-owner-no-results")?.remove();
+  if (!visibleCount && menu.querySelector("[data-ministry-owner-option]")) {
+    menu.insertAdjacentHTML("beforeend", `<div class="ministry-owner-no-results">Nenhum membro encontrado.</div>`);
+  }
+}
+
+function openMinistryOwnerMenu(input) {
+  const box = input.closest("[data-ministry-owner-box]");
+  const menu = box?.querySelector("[data-ministry-owner-menu]");
+  if (!menu) return;
+  document.querySelectorAll("[data-ministry-owner-menu]").forEach((item) => {
+    if (item !== menu) item.hidden = true;
+  });
+  filterMinistryOwnerOptions(input);
+  menu.hidden = false;
+}
+
+document.addEventListener("input", (event) => {
+  const input = event.target.closest("[data-ministry-owner-input]");
+  if (!input) return;
+  openMinistryOwnerMenu(input);
+});
+
+document.addEventListener("focusin", (event) => {
+  const input = event.target.closest("[data-ministry-owner-input]");
+  if (input) openMinistryOwnerMenu(input);
+});
+
 document.addEventListener("submit", async (event) => {
   if (event.target.id !== "memberProfileForm") return;
   event.preventDefault();
@@ -4891,6 +4952,30 @@ document.addEventListener("click", (event) => {
 
   const copyButton = event.target.closest("[data-copy]");
   if (copyButton) copyText(copyButton.dataset.copy);
+
+  const ministryOwnerToggle = event.target.closest("[data-ministry-owner-toggle]");
+  if (ministryOwnerToggle) {
+    const input = ministryOwnerToggle.closest("[data-ministry-owner-box]")?.querySelector("[data-ministry-owner-input]");
+    if (input) {
+      openMinistryOwnerMenu(input);
+      input.focus();
+    }
+  }
+
+  const ministryOwnerOption = event.target.closest("[data-ministry-owner-option]");
+  if (ministryOwnerOption) {
+    const box = ministryOwnerOption.closest("[data-ministry-owner-box]");
+    const input = box?.querySelector("[data-ministry-owner-input]");
+    const menu = box?.querySelector("[data-ministry-owner-menu]");
+    if (input) input.value = ministryOwnerOption.dataset.ministryOwnerOption || "";
+    if (menu) menu.hidden = true;
+  }
+
+  if (!event.target.closest("[data-ministry-owner-box]")) {
+    document.querySelectorAll("[data-ministry-owner-menu]").forEach((menu) => {
+      menu.hidden = true;
+    });
+  }
 
   if (event.target.closest("#copyPublicLinkButton")) copyText(publicJoinLink());
   if (event.target.closest("#openPublicLinkButton")) location.href = publicJoinLink();
