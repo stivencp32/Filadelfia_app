@@ -5,10 +5,11 @@
 1. Crie um projeto no Supabase.
 2. Abra `SQL Editor`.
 3. Cole e execute todo o conteudo de `supabase/schema.sql`.
-4. Em `Authentication > Providers`, deixe `Email` ativo.
-5. Copie `supabase.config.example.js` para `supabase.config.js`.
-6. Preencha `url` e `anonKey` com os dados de `Project Settings > API`.
-7. Nunca use a `service_role key` no navegador.
+4. Para PIX automatico, cole e execute `supabase/pix-payments.sql`.
+5. Em `Authentication > Providers`, deixe `Email` ativo.
+6. Copie `supabase.config.example.js` para `supabase.config.js`.
+7. Preencha `url` e `anonKey` com os dados de `Project Settings > API`.
+8. Nunca use a `service_role key` no navegador.
 
 ## Primeiro administrador
 
@@ -77,6 +78,7 @@ Para regenerar a seed:
 - `events`, `event_registrations`: eventos e inscricoes.
 - `pastoral_requests`: pedidos pastorais e de oracao.
 - `finance_categories`, `financial_entries`: plano de contas e lancamentos financeiros.
+- `pix_transactions`: transacoes PIX recebidas por webhook, vinculadas a lancamentos financeiros.
 - `messages`: comunicados.
 - `library_items`: biblioteca/conteudos.
 - `kids_children`, `kids_checkins`: kids e check-in/check-out.
@@ -93,6 +95,49 @@ O schema ja liga RLS em todas as tabelas.
 - Financeiro fica restrito ao modulo `finance`.
 - Dados privados de membros ficam restritos ao modulo `members`.
 - Pedidos pastorais confidenciais ficam restritos ao modulo `pastoral`.
+
+## PIX automatico por webhook
+
+O app publicado no GitHub Pages nao recebe webhook diretamente. Para confirmacao automatica de PIX, use a Edge Function em `supabase/functions/pix-webhook`.
+
+Fluxo esperado:
+
+1. O gateway gera o PIX dinamico e envia um identificador de transacao.
+2. A transacao e salva em `pix_transactions` como pendente pelo seu backend/gateway.
+3. Quando o pagamento cair, o gateway chama a URL da Edge Function.
+4. A Edge Function valida o segredo, normaliza o payload e chama `record_pix_payment`.
+5. `record_pix_payment` marca a transacao como paga e cria uma linha em `financial_entries`.
+
+Variaveis da Edge Function:
+
+```text
+SUPABASE_URL=https://seu-projeto.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=sua-service-role-key
+SUPABASE_PIX_ORG_ID=id-da-organizacao
+PIX_WEBHOOK_SECRET=um-segredo-forte-para-validar-o-header
+```
+
+Deploy:
+
+```powershell
+supabase functions deploy pix-webhook
+supabase secrets set PIX_WEBHOOK_SECRET="troque-este-segredo"
+supabase secrets set SUPABASE_PIX_ORG_ID="uuid-da-organizacao"
+```
+
+Configure no gateway a URL:
+
+```text
+https://SEU-PROJETO.supabase.co/functions/v1/pix-webhook
+```
+
+Envie o segredo no header `x-pix-secret` ou `Authorization: Bearer ...`.
+
+Observacoes:
+
+- A funcao e idempotente: se o gateway reenviar o mesmo pagamento, nao duplica o lancamento financeiro.
+- O payload e generico. Ao escolher um gateway especifico, ajuste `normalizePixPayload` se o nome dos campos for diferente.
+- Nao exponha `SUPABASE_SERVICE_ROLE_KEY` no front-end.
 
 ## Observacao importante
 

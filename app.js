@@ -3332,6 +3332,10 @@ function renderMemberOfferingsView() {
       <span>${escapeHtml(state.settings.pixKey || "Chave Pix ainda n\u00e3o cadastrada")}</span>
       ${state.settings.pixKey ? `<button class="table-action" data-copy="${escapeHtml(state.settings.pixKey)}" type="button">Copiar Pix</button>` : ""}
     </section>
+    <section class="member-live-pix">
+      <strong>PIX com confirma\u00e7\u00e3o autom\u00e1tica</strong>
+      <span>Quando o webhook do gateway estiver configurado, os pagamentos entram no financeiro em tempo real e aparecem aqui ap\u00f3s a confirma\u00e7\u00e3o.</span>
+    </section>
     ${entries.length ? `<div class="member-live-list">${entries.map((entry) => `
       <article class="member-live-card">
         <i data-lucide="receipt"></i>
