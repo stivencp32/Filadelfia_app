@@ -2503,9 +2503,12 @@ async function geocodeMemberAddress(member) {
   }
 
   const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${encodeURIComponent(query)}`;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 4500);
   const response = await fetch(url, {
-    headers: { Accept: "application/json" }
-  });
+    headers: { Accept: "application/json" },
+    signal: controller.signal
+  }).finally(() => window.clearTimeout(timeout));
   if (!response.ok) return { ok: false, message: "Nao foi possivel consultar o mapa agora." };
 
   const [result] = await response.json();
@@ -4612,22 +4615,6 @@ document.querySelector("#memberForm")?.addEventListener("submit", async (event) 
   const photo = await readImageFile(event.currentTarget.elements.photoFile?.files?.[0]);
   if (photo) data.photo = photo;
   delete data.photoFile;
-  const hasMemberCoords = Number.isFinite(parseCoordinate(data.lat)) && Number.isFinite(parseCoordinate(data.lng));
-  let memberGeocodeSkipped = false;
-  if (!hasMemberCoords && data.address && data.city && data.state) {
-    try {
-      const geocoded = await geocodeMemberAddress(data);
-      if (geocoded.ok) {
-        data.lat = geocoded.lat;
-        data.lng = geocoded.lng;
-      } else {
-        memberGeocodeSkipped = true;
-      }
-    } catch (error) {
-      console.warn("Member geocode skipped:", error.message);
-      memberGeocodeSkipped = true;
-    }
-  }
   let existingIndex = state.members.findIndex((member) => member.id && member.id === data.id);
   if (existingIndex < 0 && data.id) existingIndex = state.members.findIndex((member) => member.id === data.id);
   if (existingIndex < 0 && !data.id) {
@@ -4658,7 +4645,7 @@ document.querySelector("#memberForm")?.addEventListener("submit", async (event) 
   if (saveResult.supabase === false) {
     showAppToast(`Membro salvo só neste navegador. Supabase não gravou: ${saveResult.error?.message || "erro sem detalhe"}`, "error");
   } else {
-    showAppToast(memberGeocodeSkipped ? "Membro salvo. O endereço ficou sem ponto no mapa por enquanto." : "Membro salvo.");
+    showAppToast("Membro salvo.");
   }
 });
 
