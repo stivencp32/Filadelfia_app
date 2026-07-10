@@ -332,12 +332,16 @@ function applySidebarState() {
 }
 
 function saveState() {
+  saveLocalStateOnly();
+  saveServerState();
+}
+
+function saveLocalStateOnly() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (error) {
     console.warn("Local save failed:", error.message);
   }
-  saveServerState();
 }
 
 function serverStatePayload() {
@@ -1082,6 +1086,39 @@ async function savePublicMemberProfile(member) {
     if (index >= 0) list[index] = { ...list[index], ...savedMember };
   }
   return { supabase: true, local: localSaved };
+}
+
+async function saveChurchUnit(church) {
+  saveLocalStateOnly();
+  if (!supabaseConfigured()) {
+    const local = await saveLocalServerState();
+    return { supabase: null, local };
+  }
+  const client = supabaseClient();
+  if (!client) return { supabase: null, local: false };
+  try {
+    const organizationId = await resolveOrganizationId(client);
+    if (!organizationId) return { supabase: false, local: false, error: { message: "Organização não encontrada no Supabase." } };
+    const { data: sessionData } = await client.auth.getSession();
+    if (!sessionData?.session) return { supabase: false, local: false, error: { message: "Sessão expirada. Entre novamente para salvar no banco." } };
+    const result = await client
+      .from("church_units")
+      .upsert(stateChurchToDb(church), { onConflict: "id" })
+      .select()
+      .maybeSingle();
+    if (result.error) {
+      console.warn("Supabase church save failed:", result.error.message);
+      return { supabase: false, local: false, error: result.error };
+    }
+    const savedChurch = result.data ? dbChurchToState(result.data) : church;
+    const index = state.churches.findIndex((item) => item.id === savedChurch.id);
+    if (index >= 0) state.churches[index] = { ...state.churches[index], ...savedChurch };
+    saveLocalStateOnly();
+    return { supabase: true, local: true };
+  } catch (error) {
+    console.warn("Supabase church save failed:", error.message);
+    return { supabase: false, local: false, error };
+  }
 }
 
 async function loadMemberProfileByLogin(identifier, password) {
@@ -4396,13 +4433,17 @@ document.querySelector("#churchForm")?.addEventListener("submit", async (event) 
   if (existingIndex >= 0) state.churches[existingIndex] = church;
   else state.churches.unshift({ ...church, createdAt: new Date().toISOString() });
 
-  saveState();
+  const saveResult = await saveChurchUnit(existingIndex >= 0 ? church : state.churches[0]);
   event.currentTarget.reset();
   setValue("#churchId", "");
   setText("#churchGeocodeStatus", "");
   closeChurchModal();
   renderAll();
-  showAppToast(church.lat && church.lng ? "Igreja salva e posicionada no mapa." : "Igreja salva. Confira o endereco para posicionar no mapa.", church.lat && church.lng ? "success" : "warning");
+  if (saveResult.supabase === false) {
+    showAppToast(`Igreja salva só neste navegador. Supabase não gravou: ${saveResult.error?.message || "erro sem detalhe"}`, "error");
+    return;
+  }
+  showAppToast(church.lat && church.lng ? "Igreja salva no banco e posicionada no mapa." : "Igreja salva no banco. Confira o endereco para posicionar no mapa.", church.lat && church.lng ? "success" : "warning");
 });
 
 document.querySelector("#eventForm")?.addEventListener("submit", (event) => {
