@@ -57,7 +57,9 @@ const roleDepartments = {
 
 const DEFAULT_ORG_LOGO = "./assets/filadelfia-logo-dark.jpeg";
 const BIBLE_API_BASE = "https://www.abibliadigital.com.br/api";
+const BIBLE_API_FALLBACK_BASE = "https://bible-api.com";
 const BIBLE_VERSIONS = [
+  { id: "almeida", label: "Almeida" },
   { id: "nvi", label: "NVI" },
   { id: "ra", label: "RA" },
   { id: "acf", label: "ACF" }
@@ -271,7 +273,7 @@ let financeEvolutionMode = "month";
 let financeReportMode = "dre";
 let memberAppView = "home";
 let memberBibleState = {
-  version: "nvi",
+  version: "almeida",
   book: "sl",
   chapter: 23,
   verse: "",
@@ -3106,6 +3108,45 @@ async function requestBibleJson(path, options = {}) {
   return data;
 }
 
+function cleanBibleText(text = "") {
+  return String(text || "").replace(/\s+/g, " ").trim();
+}
+
+function bibleApiReference({ book = memberBibleState.book, chapter = memberBibleState.chapter, verse = memberBibleState.verse } = {}) {
+  const selectedBook = bibleBookByAbbrev(book);
+  return `${selectedBook.name} ${chapter}${verse ? `:${verse}` : ""}`;
+}
+
+function normalizeBibleApiResult(data, fallbackBook = bibleBookByAbbrev(), fallbackChapter = memberBibleState.chapter) {
+  const verses = (data?.verses || []).map((verse) => ({
+    number: verse.verse,
+    text: cleanBibleText(verse.text)
+  }));
+  const firstVerse = data?.verses?.[0] || {};
+  return {
+    book: {
+      name: firstVerse.book_name || fallbackBook.name,
+      version: "almeida"
+    },
+    chapter: {
+      number: firstVerse.chapter || fallbackChapter
+    },
+    verses,
+    source: "bible-api"
+  };
+}
+
+async function requestBibleApiReference(reference) {
+  const response = await fetch(`${BIBLE_API_FALLBACK_BASE}/${encodeURIComponent(reference)}?translation=almeida`, {
+    headers: bibleRequestHeaders()
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok || data?.error || !data?.verses?.length) {
+    throw new Error(data?.error || "Não foi possível consultar a Bible-API.com agora.");
+  }
+  return normalizeBibleApiResult(data);
+}
+
 function friendlyBibleError(data) {
   const rawMessage = [data?.msg, data?.err?.code, data?.err?.message].filter(Boolean).join(" ");
   if (/NR_CLOSED|unexpected error|issue|github|Oops/i.test(rawMessage)) {
@@ -3156,7 +3197,7 @@ function renderBibleResult() {
     return `
       <section class="bible-result-heading">
         <strong>${escapeHtml(`${result.book?.name || bibleBookByAbbrev().name} ${result.chapter?.number || memberBibleState.chapter}`)}</strong>
-        <span>${escapeHtml((result.book?.version || memberBibleState.version).toUpperCase())}</span>
+        <span>${escapeHtml(result.source === "bible-api" ? "ALMEIDA" : (result.book?.version || memberBibleState.version).toUpperCase())}</span>
       </section>
       <div class="bible-verse-list">
         ${result.verses.map((verse) => `
@@ -3207,7 +3248,7 @@ function renderMemberBibleView() {
         </label>
         <button class="outline" type="submit"><i data-lucide="search"></i> Buscar</button>
       </form>
-      <small class="bible-api-note">A Bíblia Digital limita acessos anônimos; se a API estiver indisponível, tente novamente em instantes.</small>
+      <small class="bible-api-note">Almeida usa Bible-API.com sem autenticação. Busca por palavra usa A Bíblia Digital.</small>
       <div class="bible-result">${renderBibleResult()}</div>
     </section>
   `;
@@ -3221,23 +3262,50 @@ async function loadBiblePassage({ random = false, search = "" } = {}) {
   try {
     const version = memberBibleState.version;
     if (search) {
+      if (version === "almeida") {
+        throw new Error("A busca por palavra está disponível em NVI, RA ou ACF. Para Almeida, informe uma referência de livro e capítulo.");
+      }
       memberBibleState.mode = "search";
       memberBibleState.result = await requestBibleJson("/verses/search", {
         method: "POST",
         body: JSON.stringify({ version, search })
       });
     } else if (random) {
+      if (version === "almeida") {
+        const randomBook = BIBLE_BOOKS[Math.floor(Math.random() * BIBLE_BOOKS.length)];
+        const randomChapter = Math.floor(Math.random() * randomBook.chapters) + 1;
+        memberBibleState = { ...memberBibleState, book: randomBook.abbrev, chapter: randomChapter, verse: "" };
+        memberBibleState.mode = "chapter";
+        memberBibleState.result = await requestBibleApiReference(bibleApiReference());
+        return;
+      }
       memberBibleState.mode = "verse";
-      memberBibleState.result = await requestBibleJson(`/verses/${encodeURIComponent(version)}/random`);
+      try {
+        memberBibleState.result = await requestBibleJson(`/verses/${encodeURIComponent(version)}/random`);
+      } catch {
+        const randomBook = BIBLE_BOOKS[Math.floor(Math.random() * BIBLE_BOOKS.length)];
+        const randomChapter = Math.floor(Math.random() * randomBook.chapters) + 1;
+        memberBibleState = { ...memberBibleState, version: "almeida", book: randomBook.abbrev, chapter: randomChapter, verse: "", mode: "chapter" };
+        memberBibleState.result = await requestBibleApiReference(bibleApiReference());
+      }
     } else {
-      const book = encodeURIComponent(memberBibleState.book);
-      const chapter = encodeURIComponent(memberBibleState.chapter);
       const verse = String(memberBibleState.verse || "").trim();
       memberBibleState.mode = verse ? "verse" : "chapter";
-      memberBibleState.result = await requestBibleJson(`/verses/${encodeURIComponent(version)}/${book}/${chapter}${verse ? `/${encodeURIComponent(verse)}` : ""}`);
+      if (version === "almeida") {
+        memberBibleState.result = await requestBibleApiReference(bibleApiReference());
+      } else {
+        const book = encodeURIComponent(memberBibleState.book);
+        const chapter = encodeURIComponent(memberBibleState.chapter);
+        try {
+          memberBibleState.result = await requestBibleJson(`/verses/${encodeURIComponent(version)}/${book}/${chapter}${verse ? `/${encodeURIComponent(verse)}` : ""}`);
+        } catch {
+          memberBibleState.version = "almeida";
+          memberBibleState.result = await requestBibleApiReference(bibleApiReference());
+        }
+      }
     }
   } catch (error) {
-    memberBibleState.error = error.message || "Nao foi possivel consultar A Biblia Digital agora.";
+    memberBibleState.error = error.message || "Não foi possível consultar a Bíblia agora.";
   } finally {
     memberBibleState.loading = false;
     renderMemberLiveView();
