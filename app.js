@@ -261,6 +261,7 @@ let memberMarkers = null;
 const geocodingMemberIds = new Set();
 let activeOrganizationId = window.FILADELFIA_SUPABASE?.defaultOrganizationId || "";
 let filadelfiaSupabaseClient = null;
+let memberAddressColumnsAvailable = null;
 
 const authScreen = document.querySelector("#authScreen");
 const publicScreen = document.querySelector("#publicScreen");
@@ -699,8 +700,9 @@ function stripMemberAddressMeta(notes = "") {
   return String(notes || "").replace(MEMBER_ADDRESS_META_PATTERN, "").trim();
 }
 
-function memberNotesToDb(member) {
+function memberNotesToDb(member, addressColumnsAvailable = false) {
   const cleanNotes = stripMemberAddressMeta(member.notes || "");
+  if (addressColumnsAvailable) return cleanNotes || null;
   const address = {
     address: member.address || "",
     neighborhood: member.neighborhood || "",
@@ -734,13 +736,13 @@ function dbMemberToState(row) {
     status: row.status || "Visitante",
     isLeader: row.is_leader,
     notes: stripMemberAddressMeta(row.notes || ""),
-    address: addressMeta.address || "",
-    neighborhood: addressMeta.neighborhood || "",
-    city: addressMeta.city || "",
-    state: addressMeta.state || "",
-    zip: addressMeta.zip || "",
-    lat: addressMeta.lat || "",
-    lng: addressMeta.lng || "",
+    address: row.address || addressMeta.address || "",
+    neighborhood: row.neighborhood || addressMeta.neighborhood || "",
+    city: row.city || addressMeta.city || "",
+    state: row.state || addressMeta.state || "",
+    zip: row.zip || addressMeta.zip || "",
+    lat: row.lat ?? addressMeta.lat ?? "",
+    lng: row.lng ?? addressMeta.lng ?? "",
     accessType: row.source === "public_link" ? "public" : "admin",
     source: row.source === "public_link" ? "Link público" : "Admin",
     createdAt: row.created_at,
@@ -748,8 +750,8 @@ function dbMemberToState(row) {
   };
 }
 
-function stateMemberToDb(member, source = "admin") {
-  return {
+function stateMemberToDb(member, source = "admin", addressColumnsAvailable = false) {
+  const payload = {
     id: member.id,
     organization_id: activeOrganizationId,
     auth_user_id: member.authUserId || null,
@@ -767,9 +769,19 @@ function stateMemberToDb(member, source = "admin") {
     entry_date: member.entryDate || null,
     status: member.status || "Visitante",
     is_leader: member.isLeader === true || member.isLeader === "on",
-    notes: memberNotesToDb(member),
+    notes: memberNotesToDb(member, addressColumnsAvailable),
     source
   };
+  if (addressColumnsAvailable) {
+    payload.address = member.address || null;
+    payload.neighborhood = member.neighborhood || null;
+    payload.city = member.city || null;
+    payload.state = member.state || null;
+    payload.zip = member.zip || null;
+    payload.lat = member.lat ? Number(member.lat) : null;
+    payload.lng = member.lng ? Number(member.lng) : null;
+  }
+  return payload;
 }
 
 function dbEventToState(row) {
@@ -1163,6 +1175,15 @@ async function saveChurchUnit(church) {
   }
 }
 
+async function hasMemberAddressColumns(client = supabaseClient()) {
+  if (memberAddressColumnsAvailable !== null) return memberAddressColumnsAvailable;
+  if (!client) return false;
+  const result = await client.from("members").select("address,neighborhood,city,state,zip,lat,lng").limit(1);
+  memberAddressColumnsAvailable = !result.error;
+  if (result.error) console.warn("Supabase member address columns unavailable:", result.error.message);
+  return memberAddressColumnsAvailable;
+}
+
 async function saveMemberRecord(member, source = "admin") {
   saveLocalStateOnly();
   if (!supabaseConfigured()) {
@@ -1176,9 +1197,10 @@ async function saveMemberRecord(member, source = "admin") {
     if (!organizationId) return { supabase: false, local: false, error: { message: "Organização não encontrada no Supabase." } };
     const sessionResult = await ensureSupabaseSession();
     if (!sessionResult.session) return { supabase: false, local: false, error: sessionResult.error || { message: "Sessão expirada. Entre novamente para salvar no banco." } };
+    const addressColumnsAvailable = await hasMemberAddressColumns(client);
     const result = await client
       .from("members")
-      .upsert(stateMemberToDb(member, source), { onConflict: "id" })
+      .upsert(stateMemberToDb(member, source, addressColumnsAvailable), { onConflict: "id" })
       .select()
       .maybeSingle();
     if (result.error) {
