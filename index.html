@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Admin Igreja</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="./styles.css?v=20260710-ministry-owner-combo-1" />
+    <link rel="stylesheet" href="./styles.css?v=20260710-member-map-2" />
     <script defer src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -13,7 +13,7 @@
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script defer src="./app-config.js?v=20260630-26"></script>
     <script defer src="./supabase.config.js?v=20260630-27"></script>
-    <script defer src="./app.js?v=20260710-church-session-1"></script>
+    <script defer src="./app.js?v=20260710-member-map-2"></script>
   </head>
   <body class="is-auth-screen">
     <div class="app-toast" id="appToast" role="status" aria-live="polite" hidden></div>
@@ -353,6 +353,14 @@
               <button type="button" data-member-filter="new-visitors"><strong id="newVisitorsCount">0</strong><span>Novos visitantes</span></button>
               <button type="button" data-member-filter="member"><strong id="activeMembersCount">0</strong><span>Membros</span></button>
               <button type="button" data-member-filter="congregado"><strong id="congregadosCount">0</strong><span>Congregados</span></button>
+              <button type="button" id="toggleMemberMapButton"><strong id="memberAddressCount">0</strong><span>Mapa de regiões</span></button>
+            </div>
+            <div class="panel member-map-panel" id="memberMapPanel" hidden>
+              <div class="panel-title-row">
+                <h2>Mapa dos membros e visitantes</h2>
+                <span class="map-note" id="memberMapNote">Cadastre endereços para visualizar a distribuição.</span>
+              </div>
+              <div class="church-map member-map" id="memberMap" role="region" aria-label="Mapa de endereços dos membros"></div>
             </div>
             <div class="panel">
               <div class="panel-title-row">
@@ -396,6 +404,13 @@
                     <input type="hidden" name="photo" id="memberPhotoData" />
                     <label>Matrícula<input name="registration" placeholder="Gerada automaticamente" readonly /></label>
                     <label>Igreja<select name="churchId" id="memberChurchSelect"></select></label>
+                    <label class="span-2">Endereço<input name="address" placeholder="Rua, número e complemento" /></label>
+                    <label>Bairro<input name="neighborhood" placeholder="Bairro" /></label>
+                    <label>Cidade<input name="city" placeholder="Cidade" /></label>
+                    <label>UF<input name="state" maxlength="2" placeholder="RJ" /></label>
+                    <label>CEP<input name="zip" placeholder="00000-000" /></label>
+                    <input type="hidden" name="lat" />
+                    <input type="hidden" name="lng" />
                     <label>Departamento<select name="department" id="memberDepartmentSelect"></select></label>
                     <label>Função<select name="ministryRole" id="memberFunctionSelect"></select></label>
                     <label>Data de Entrada<input name="entryDate" type="date" /></label>

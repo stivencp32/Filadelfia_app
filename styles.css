@@ -2046,6 +2046,23 @@ td .table-action {
   padding-inline: 10px;
 }
 
+.member-map-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.member-map-panel[hidden] {
+  display: none !important;
+}
+
+.member-map-panel .panel-title-row {
+  margin-bottom: 0;
+}
+
+.member-map {
+  min-height: 420px;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

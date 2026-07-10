@@ -256,6 +256,9 @@ const FINANCE_PAGE_SIZE = 10;
 let churchMap = null;
 let churchMarkers = null;
 const geocodingChurchIds = new Set();
+let memberMap = null;
+let memberMarkers = null;
+const geocodingMemberIds = new Set();
 let activeOrganizationId = window.FILADELFIA_SUPABASE?.defaultOrganizationId || "";
 let filadelfiaSupabaseClient = null;
 
@@ -680,7 +683,39 @@ function stateChurchToDb(church) {
   };
 }
 
+const MEMBER_ADDRESS_META_PATTERN = /\n?\[member_address\]([\s\S]*?)\[\/member_address\]/i;
+
+function parseMemberAddressMeta(notes = "") {
+  const match = String(notes || "").match(MEMBER_ADDRESS_META_PATTERN);
+  if (!match) return {};
+  try {
+    return JSON.parse(match[1]) || {};
+  } catch {
+    return {};
+  }
+}
+
+function stripMemberAddressMeta(notes = "") {
+  return String(notes || "").replace(MEMBER_ADDRESS_META_PATTERN, "").trim();
+}
+
+function memberNotesToDb(member) {
+  const cleanNotes = stripMemberAddressMeta(member.notes || "");
+  const address = {
+    address: member.address || "",
+    neighborhood: member.neighborhood || "",
+    city: member.city || "",
+    state: member.state || "",
+    zip: member.zip || "",
+    lat: member.lat || "",
+    lng: member.lng || ""
+  };
+  const hasAddress = Object.values(address).some(Boolean);
+  return [cleanNotes, hasAddress ? `[member_address]${JSON.stringify(address)}[/member_address]` : ""].filter(Boolean).join("\n\n") || null;
+}
+
 function dbMemberToState(row) {
+  const addressMeta = parseMemberAddressMeta(row.notes || "");
   return {
     id: row.id,
     authUserId: row.auth_user_id,
@@ -698,7 +733,14 @@ function dbMemberToState(row) {
     entryDate: row.entry_date || "",
     status: row.status || "Visitante",
     isLeader: row.is_leader,
-    notes: row.notes || "",
+    notes: stripMemberAddressMeta(row.notes || ""),
+    address: addressMeta.address || "",
+    neighborhood: addressMeta.neighborhood || "",
+    city: addressMeta.city || "",
+    state: addressMeta.state || "",
+    zip: addressMeta.zip || "",
+    lat: addressMeta.lat || "",
+    lng: addressMeta.lng || "",
     accessType: row.source === "public_link" ? "public" : "admin",
     source: row.source === "public_link" ? "Link público" : "Admin",
     createdAt: row.created_at,
@@ -725,7 +767,7 @@ function stateMemberToDb(member, source = "admin") {
     entry_date: member.entryDate || null,
     status: member.status || "Visitante",
     is_leader: member.isLeader === true || member.isLeader === "on",
-    notes: member.notes || null,
+    notes: memberNotesToDb(member),
     source
   };
 }
@@ -1121,6 +1163,39 @@ async function saveChurchUnit(church) {
   }
 }
 
+async function saveMemberRecord(member, source = "admin") {
+  saveLocalStateOnly();
+  if (!supabaseConfigured()) {
+    const local = await saveLocalServerState();
+    return { supabase: null, local };
+  }
+  const client = supabaseClient();
+  if (!client) return { supabase: null, local: false };
+  try {
+    const organizationId = await resolveOrganizationId(client);
+    if (!organizationId) return { supabase: false, local: false, error: { message: "Organização não encontrada no Supabase." } };
+    const sessionResult = await ensureSupabaseSession();
+    if (!sessionResult.session) return { supabase: false, local: false, error: sessionResult.error || { message: "Sessão expirada. Entre novamente para salvar no banco." } };
+    const result = await client
+      .from("members")
+      .upsert(stateMemberToDb(member, source), { onConflict: "id" })
+      .select()
+      .maybeSingle();
+    if (result.error) {
+      console.warn("Supabase member save failed:", result.error.message);
+      return { supabase: false, local: false, error: result.error };
+    }
+    const savedMember = result.data ? dbMemberToState(result.data) : member;
+    const index = state.members.findIndex((item) => item.id === savedMember.id);
+    if (index >= 0) state.members[index] = { ...state.members[index], ...savedMember };
+    saveLocalStateOnly();
+    return { supabase: true, local: true };
+  } catch (error) {
+    console.warn("Supabase member save failed:", error.message);
+    return { supabase: false, local: false, error };
+  }
+}
+
 async function loadMemberProfileByLogin(identifier, password) {
   const login = String(identifier || "").trim().toLowerCase();
   const localMember = [...(state.members || []), ...(state.publicMembers || [])]
@@ -1450,6 +1525,7 @@ function activateView(viewId) {
   document.body.classList.remove("menu-open");
   window.scrollTo({ top: 0, behavior: "smooth" });
   if (viewId === "churches") window.setTimeout(() => churchMap?.invalidateSize(), 160);
+  if (viewId === "members") window.setTimeout(() => memberMap?.invalidateSize(), 160);
 }
 
 function memberSession() {
@@ -1781,6 +1857,7 @@ function renderMembers() {
     </tr>
   `).join("");
   renderTablePagination(document.querySelector("#membersPagination"), filteredMembers.length, membersPage, totalPages, "members-page");
+  renderMemberMap();
 }
 
 function openMemberModal(title = "Cadastrar membro") {
@@ -2146,6 +2223,7 @@ function syncPrayerTargetFields() {
 }
 
 function normalizeMember(member, index) {
+  const addressMeta = parseMemberAddressMeta(member.notes || "");
   const statusMap = {
     "Frequentador": "Visitante",
     "Membro ativo": "Membro",
@@ -2158,6 +2236,14 @@ function normalizeMember(member, index) {
     : (Number.isInteger(member._sourceIndex) ? member._sourceIndex : index);
   return {
     ...member,
+    notes: stripMemberAddressMeta(member.notes || ""),
+    address: member.address || addressMeta.address || "",
+    neighborhood: member.neighborhood || addressMeta.neighborhood || "",
+    city: member.city || addressMeta.city || "",
+    state: member.state || addressMeta.state || "",
+    zip: member.zip || addressMeta.zip || "",
+    lat: member.lat || addressMeta.lat || "",
+    lng: member.lng || addressMeta.lng || "",
     _key: `${source}:${keyValue}`,
     entryDate: member.entryDate || (member._sourceType === "public" || member.source === "Link público" ? String(member.createdAt || "").slice(0, 10) : ""),
     status: statusMap[member.status] || member.status || "Visitante"
@@ -2173,6 +2259,7 @@ function renderMemberStats(members) {
   setText("#newVisitorsCount", members.filter((member) => member.status === "Visitante" && isCurrentMonth(member.entryDate || member.createdAt)).length);
   setText("#activeMembersCount", members.filter((member) => member.status === "Membro").length);
   setText("#congregadosCount", members.filter((member) => member.status === "Congregado").length);
+  setText("#memberAddressCount", members.filter((member) => memberAddressQuery(member)).length);
   setText("#ageChildCount", members.filter((member) => inAgeRange(member, 0, 12)).length);
   setText("#ageTeenCount", members.filter((member) => inAgeRange(member, 13, 17)).length);
   setText("#ageAdultCount", members.filter((member) => inAgeRange(member, 18, 59)).length);
@@ -2359,6 +2446,11 @@ function churchAddressQuery(church) {
   return [church.address, church.city, church.state, "Brasil"].filter(Boolean).join(", ");
 }
 
+function memberAddressQuery(member) {
+  const parts = [member.address, member.neighborhood, member.city, member.state, member.zip].filter(Boolean);
+  return parts.length ? [...parts, "Brasil"].join(", ") : "";
+}
+
 async function geocodeChurchAddress(church) {
   const query = churchAddressQuery(church);
   if (!church.address || !church.city || !church.state || query.length < 8) {
@@ -2373,6 +2465,29 @@ async function geocodeChurchAddress(church) {
 
   const [result] = await response.json();
   if (!result) return { ok: false, message: "Endereco nao encontrado. Confira rua, numero, bairro, cidade e UF." };
+
+  return {
+    ok: true,
+    lat: result.lat,
+    lng: result.lon,
+    label: result.display_name || query
+  };
+}
+
+async function geocodeMemberAddress(member) {
+  const query = memberAddressQuery(member);
+  if (!member.address || !member.city || !member.state || query.length < 8) {
+    return { ok: false, message: "Preencha endereço, cidade e UF para localizar no mapa." };
+  }
+
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${encodeURIComponent(query)}`;
+  const response = await fetch(url, {
+    headers: { Accept: "application/json" }
+  });
+  if (!response.ok) return { ok: false, message: "Nao foi possivel consultar o mapa agora." };
+
+  const [result] = await response.json();
+  if (!result) return { ok: false, message: "Endereco de membro nao encontrado." };
 
   return {
     ok: true,
@@ -2476,6 +2591,85 @@ function renderMessages() {
       <button class="table-action" data-remove-message="${index}" type="button">Remover</button>
     </div>
   `).join("");
+}
+
+function memberMapEntries() {
+  return [
+    ...state.publicMembers.map((member, index) => normalizeMember({ ...member, source: "Link público", _sourceType: "public", _sourceIndex: index }, index)),
+    ...state.members.map((member, index) => normalizeMember({ ...member, source: "Admin", _sourceType: "admin", _sourceIndex: index }, index))
+  ].filter((member) => memberAddressQuery(member));
+}
+
+function renderMemberMap() {
+  const panel = document.querySelector("#memberMapPanel");
+  const mapNode = document.querySelector("#memberMap");
+  const note = document.querySelector("#memberMapNote");
+  if (!panel || panel.hidden || !mapNode || typeof L === "undefined") return;
+
+  const defaultCenter = [-22.8268, -43.0634];
+  if (!memberMap) {
+    memberMap = L.map(mapNode, { scrollWheelZoom: false }).setView(defaultCenter, 11);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(memberMap);
+    memberMarkers = L.layerGroup().addTo(memberMap);
+  }
+
+  memberMarkers.clearLayers();
+  const entries = memberMapEntries();
+  const positioned = entries
+    .map((member) => ({ member, lat: parseCoordinate(member.lat), lng: parseCoordinate(member.lng) }))
+    .filter((item) => Number.isFinite(item.lat) && Number.isFinite(item.lng));
+
+  positioned.forEach(({ member, lat, lng }) => {
+    const popup = `
+      <strong>${escapeHtml(member.name || "Membro")}</strong><br>
+      ${escapeHtml([member.status, member.source].filter(Boolean).join(" - "))}<br>
+      <small>${escapeHtml(memberAddressQuery(member).replace(/, Brasil$/, ""))}</small>
+    `;
+    L.marker([lat, lng]).addTo(memberMarkers).bindPopup(popup);
+  });
+
+  if (positioned.length > 0) {
+    const bounds = L.latLngBounds(positioned.map((item) => [item.lat, item.lng]));
+    memberMap.fitBounds(bounds.pad(0.22), { maxZoom: 14 });
+    if (note) note.textContent = `${positioned.length} pessoa(s) posicionada(s) no mapa.`;
+  } else {
+    memberMap.setView(defaultCenter, 11);
+    if (note) note.textContent = entries.length ? "Localizando endereços cadastrados..." : "Cadastre endereços para visualizar a distribuição.";
+  }
+
+  window.setTimeout(() => memberMap.invalidateSize(), 120);
+  geocodeMissingMembers();
+}
+
+async function geocodeMissingMembers() {
+  const panel = document.querySelector("#memberMapPanel");
+  if (!panel || panel.hidden) return;
+  const candidates = memberMapEntries().filter((member) => {
+    const hasCoords = Number.isFinite(parseCoordinate(member.lat)) && Number.isFinite(parseCoordinate(member.lng));
+    return !hasCoords && member.address && member.city && member.state && !geocodingMemberIds.has(member._key);
+  });
+  if (candidates.length === 0) return;
+
+  const member = candidates[0];
+  geocodingMemberIds.add(member._key);
+  try {
+    const result = await geocodeMemberAddress(member);
+    if (!result.ok) return;
+    const target = member._sourceType === "public" ? state.publicMembers[member._sourceIndex] : state.members[member._sourceIndex];
+    if (!target) return;
+    target.lat = result.lat;
+    target.lng = result.lng;
+    saveState();
+    renderMemberMap();
+  } catch {
+    const note = document.querySelector("#memberMapNote");
+    if (note) note.textContent = "Não foi possível localizar automaticamente alguns endereços.";
+  } finally {
+    geocodingMemberIds.delete(member._key);
+  }
 }
 
 function renderMobileApp() {
@@ -4396,6 +4590,14 @@ document.querySelector("#memberForm")?.addEventListener("submit", async (event) 
   const photo = await readImageFile(event.currentTarget.elements.photoFile?.files?.[0]);
   if (photo) data.photo = photo;
   delete data.photoFile;
+  const hasMemberCoords = Number.isFinite(parseCoordinate(data.lat)) && Number.isFinite(parseCoordinate(data.lng));
+  if (!hasMemberCoords && data.address && data.city && data.state) {
+    const geocoded = await geocodeMemberAddress(data);
+    if (geocoded.ok) {
+      data.lat = geocoded.lat;
+      data.lng = geocoded.lng;
+    }
+  }
   let existingIndex = state.members.findIndex((member) => member.id && member.id === data.id);
   if (existingIndex < 0 && data.id) existingIndex = state.members.findIndex((member) => member.id === data.id);
   if (existingIndex < 0 && !data.id) {
@@ -4415,13 +4617,19 @@ document.querySelector("#memberForm")?.addEventListener("submit", async (event) 
     const publicIndex = Number(event.currentTarget.dataset.memberIndex);
     if (Number.isInteger(publicIndex) && state.publicMembers[publicIndex]) state.publicMembers.splice(publicIndex, 1);
   }
-  saveState();
+  const savedMember = state.members.find((item) => item.id === member.id) || member;
+  const saveResult = await saveMemberRecord(savedMember, "admin");
   event.currentTarget.reset();
   event.currentTarget.dataset.memberSource = "";
   event.currentTarget.dataset.memberIndex = "";
   setValue("#memberId", "");
   closeMemberModal();
   renderAll();
+  if (saveResult.supabase === false) {
+    showAppToast(`Membro salvo só neste navegador. Supabase não gravou: ${saveResult.error?.message || "erro sem detalhe"}`, "error");
+  } else {
+    showAppToast("Membro salvo.");
+  }
 });
 
 document.querySelector("#churchForm")?.addEventListener("submit", async (event) => {
@@ -5169,6 +5377,7 @@ document.addEventListener("click", (event) => {
           <div><span>Igreja</span><strong>${escapeHtml(churchName)}</strong></div>
           <div><span>Departamento</span><strong>${escapeHtml(member.department || "Sem departamento")}</strong></div>
           <div><span>Função</span><strong>${escapeHtml(member.ministryRole || "-")}</strong></div>
+          <div class="detail-full"><span>Endereço</span><strong>${escapeHtml(memberAddressQuery(member).replace(/, Brasil$/, "") || "-")}</strong></div>
           <div><span>Liderança / responsável</span><strong>${escapeHtml(leaderLabel)}</strong></div>
           <div><span>Arrolamento</span><strong>${escapeHtml(member.status || "-")}</strong></div>
           <div><span>Entrada</span><strong>${escapeHtml(formatDate(member.entryDate) || "-")}</strong></div>
@@ -5220,6 +5429,15 @@ document.addEventListener("click", (event) => {
     membersPage = 1;
     renderMembers();
     if (window.lucide) window.lucide.createIcons();
+  }
+
+  if (event.target.closest("#toggleMemberMapButton")) {
+    const panel = document.querySelector("#memberMapPanel");
+    if (panel) {
+      panel.hidden = !panel.hidden;
+      renderMemberMap();
+      if (!panel.hidden) panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   }
 
   const editChurch = event.target.closest("[data-edit-church]");
