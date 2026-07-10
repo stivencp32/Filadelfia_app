@@ -46,6 +46,15 @@ const roleLabels = {
   finance: "Tesouraria",
 };
 
+const roleDepartments = {
+  worship: "Louvor",
+  media: "Mídia",
+  events: "Eventos",
+  kids: "Kids",
+  treasury: "Tesouraria",
+  finance: "Tesouraria",
+};
+
 const DEFAULT_ORG_LOGO = "./assets/filadelfia-logo-dark.jpeg";
 
 const departmentRoles = {
@@ -580,6 +589,8 @@ function dbUserToState(row) {
     password: row.password || "",
     role: row.role,
     permissions: row.permissions || [],
+    department: row.department || "",
+    ministryRole: row.ministry_role || "",
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at
@@ -1370,6 +1381,10 @@ function showAuth(inviteToken = "") {
     document.querySelector("#inviteAcceptForm")?.classList.add("is-visible");
     setText("#inviteContext", invite ? `Convite para ${roleLabels[invite.role] || invite.role}.` : "Convite não encontrado ou já utilizado.");
     setValue("#inviteAcceptForm [name='email']", invite?.email || "");
+    if (invite?.department) {
+      setValue("#inviteDepartmentSelect", invite.department);
+      renderMemberFunctionOptions(invite.ministryRole || "", "#inviteAcceptForm", "#inviteFunctionSelect");
+    }
   }
 }
 
@@ -1602,7 +1617,7 @@ function renderInvites() {
     const link = inviteLink(invite.token);
     return `
       <div>
-        <span>${escapeHtml(invite.name)}<small>${escapeHtml(invite.email)}</small></span>
+        <span>${escapeHtml(invite.name)}<small>${escapeHtml([invite.email, invite.department].filter(Boolean).join(" - "))}</small></span>
         <strong>${escapeHtml(roleLabels[invite.role] || invite.role)}</strong>
         <button class="table-action" data-copy="${escapeHtml(link)}" type="button">Copiar</button>
       </div>
@@ -2889,7 +2904,32 @@ function agendaWeekdayLabel(date) {
 }
 
 function ministryDepartments() {
-  return departmentNames();
+  const departments = departmentNames();
+  const user = currentUser();
+  if (user?.role === "master") return departments;
+  if (!canManage("ministries", user)) return [];
+
+  const member = findMemberForUser(user);
+  const grantedDepartments = new Set(
+    [
+      user?.department,
+      member?.department,
+      roleDepartments[user?.role],
+      ...(user?.departmentAccess || []),
+      ...(user?.ministryDepartments || []),
+      ...(user?.permissions || [])
+        .filter((permission) => String(permission).startsWith("ministries:"))
+        .map((permission) => String(permission).split(":").slice(1).join(":"))
+    ]
+      .flat()
+      .map((department) => String(department || "").trim())
+      .filter(Boolean)
+  );
+  return departments.filter((department) => grantedDepartments.has(department));
+}
+
+function canAccessMinistryDepartment(department) {
+  return ministryDepartments().includes(department);
 }
 
 function ministryTeam(department) {
@@ -2943,23 +2983,24 @@ function renderMinistries() {
   notice.hidden = mayManage;
   newActivityButton.hidden = !mayManage;
   const departments = ministryDepartments();
-  const search = String(document.querySelector("#ministrySearchInput")?.value || "").trim().toLowerCase();
+  const searchWrap = document.querySelector("#ministrySearchInput")?.closest("label");
+  const searchInput = document.querySelector("#ministrySearchInput");
+  const showSearch = currentUser()?.role === "master" && departments.length > 6;
+  if (searchWrap) searchWrap.hidden = !showSearch;
+  if (!showSearch && searchInput) searchInput.value = "";
+  const search = showSearch ? String(searchInput?.value || "").trim().toLowerCase() : "";
   if (!activeMinistryDepartment || !departments.includes(activeMinistryDepartment)) activeMinistryDepartment = departments[0] || "";
   const visibleDepartments = departments.filter((department) => !search || department.toLowerCase().includes(search));
   if (visibleDepartments.length && !visibleDepartments.includes(activeMinistryDepartment)) activeMinistryDepartment = visibleDepartments[0];
 
-  list.innerHTML = visibleDepartments.map((department) => {
-    const team = ministryTeam(department);
-    const activities = ministryActivities(department);
-    const tasks = ministryTasks(department).filter((task) => !task.done);
-    return `
-      <button class="ministry-department-card ${department === activeMinistryDepartment ? "is-selected" : ""}" type="button" data-ministry-department="${escapeHtml(department)}">
-        <span><strong>${escapeHtml(department)}</strong><br><span>${escapeHtml((departmentRoles[department] || []).slice(0, 3).join(", "))}</span></span>
-        <em class="ministry-count-pill">${team.length}</em>
-        <span>${activities.length} agendas • ${tasks.length} pendências</span>
-      </button>
-    `;
-  }).join("") || emptyChart("Nenhum departamento encontrado.");
+  list.innerHTML = visibleDepartments.length ? `
+    <label class="ministry-department-picker">
+      <span>Departamento</span>
+      <select id="ministryDepartmentSelect">
+        ${visibleDepartments.map((department) => `<option value="${escapeHtml(department)}" ${department === activeMinistryDepartment ? "selected" : ""}>${escapeHtml(department)}</option>`).join("")}
+      </select>
+    </label>
+  ` : emptyChart("Nenhum departamento liberado para este acesso.");
 
   workspace.innerHTML = renderMinistryWorkspace(activeMinistryDepartment, mayManage);
 }
@@ -3772,6 +3813,8 @@ function renderAll() {
   renderInvites();
   renderModuleMatrix();
   renderPublicLink();
+  renderDepartmentOptions("#adminInviteDepartmentSelect");
+  renderMemberFunctionOptions("", "#inviteForm", "#adminInviteFunctionSelect");
   renderChurches();
   renderMembers();
   renderPastoral();
@@ -4011,8 +4054,8 @@ document.querySelector("#inviteAcceptForm")?.addEventListener("submit", async (e
     role: invite.role,
     permissions: invite.permissions,
     positionTitle: data.positionTitle || roleLabels[invite.role] || invite.role,
-    department: data.department || "",
-    ministryRole: data.ministryRole || "",
+    department: invite.department || data.department || roleDepartments[invite.role] || "",
+    ministryRole: invite.ministryRole || data.ministryRole || "",
     roleDetails: data.roleDetails || "",
     status: "active",
     createdAt: new Date().toISOString()
@@ -4131,6 +4174,8 @@ document.querySelector("#inviteForm")?.addEventListener("submit", (event) => {
     email: data.email,
     role: data.role,
     permissions,
+    department: data.department || roleDepartments[data.role] || "",
+    ministryRole: data.ministryRole || "",
     status: "pending",
     createdAt: new Date().toISOString()
   };
@@ -4144,6 +4189,9 @@ document.querySelector("#inviteForm")?.addEventListener("submit", (event) => {
 
 document.querySelector("#roleTemplate")?.addEventListener("change", (event) => {
   renderPermissions("#invitePermissions", roleTemplates[event.target.value] || []);
+  const department = roleDepartments[event.target.value] || "";
+  setValue("#adminInviteDepartmentSelect", department);
+  renderMemberFunctionOptions("", "#inviteForm", "#adminInviteFunctionSelect");
   if (window.lucide) window.lucide.createIcons();
 });
 
@@ -4305,6 +4353,11 @@ document.addEventListener("submit", (event) => {
   if (!canManage("ministries")) return;
   const data = formData(form);
   const department = data.department || activeMinistryDepartment;
+  if (!canAccessMinistryDepartment(department)) {
+    showAppToast("Este departamento não está liberado para o seu acesso.", "warning");
+    renderAll();
+    return;
+  }
 
   if (form.id === "ministryTeamForm") {
     const member = (state.members || []).find((item) => item.id === data.memberId);
@@ -4525,6 +4578,13 @@ document.querySelector("#ministrySearchInput")?.addEventListener("input", () => 
   if (window.lucide) window.lucide.createIcons();
 });
 
+document.addEventListener("change", (event) => {
+  if (event.target?.id !== "ministryDepartmentSelect") return;
+  activeMinistryDepartment = event.target.value || activeMinistryDepartment;
+  renderMinistries();
+  if (window.lucide) window.lucide.createIcons();
+});
+
 document.querySelectorAll("#eventStartDateFilter, #eventEndDateFilter").forEach((field) => {
   field.addEventListener("input", () => {
     renderEvents();
@@ -4548,6 +4608,10 @@ document.querySelector("#eventForm")?.addEventListener("input", (event) => {
 
 document.querySelector("#memberForm")?.addEventListener("change", (event) => {
   if (event.target.name === "department") renderMemberFunctionOptions();
+});
+
+document.querySelector("#inviteForm")?.addEventListener("change", (event) => {
+  if (event.target.name === "department") renderMemberFunctionOptions("", "#inviteForm", "#adminInviteFunctionSelect");
 });
 
 document.addEventListener("submit", async (event) => {
@@ -4775,9 +4839,12 @@ document.addEventListener("click", (event) => {
 
   const ministryDepartmentButton = event.target.closest("[data-ministry-department]");
   if (ministryDepartmentButton) {
-    activeMinistryDepartment = ministryDepartmentButton.dataset.ministryDepartment || activeMinistryDepartment;
-    renderMinistries();
-    if (window.lucide) window.lucide.createIcons();
+    const department = ministryDepartmentButton.dataset.ministryDepartment || activeMinistryDepartment;
+    if (canAccessMinistryDepartment(department)) {
+      activeMinistryDepartment = department;
+      renderMinistries();
+      if (window.lucide) window.lucide.createIcons();
+    }
   }
 
   const ministryJump = event.target.closest("[data-jump-ministry-form]");
@@ -4796,7 +4863,7 @@ document.addEventListener("click", (event) => {
   const removeMinistryMember = event.target.closest("[data-remove-ministry-member]");
   if (removeMinistryMember && canManage("ministries")) {
     const member = (state.members || []).find((item) => item.id === removeMinistryMember.dataset.removeMinistryMember);
-    if (member) {
+    if (member && canAccessMinistryDepartment(member.department)) {
       member.department = "";
       member.ministryRole = "";
       member.isLeader = false;
@@ -4809,6 +4876,8 @@ document.addEventListener("click", (event) => {
 
   const removeMinistryActivity = event.target.closest("[data-remove-ministry-activity]");
   if (removeMinistryActivity && canManage("ministries")) {
+    const activity = (state.ministryActivities || []).find((item) => item.id === removeMinistryActivity.dataset.removeMinistryActivity);
+    if (!activity || !canAccessMinistryDepartment(activity.department)) return;
     state.ministryActivities = (state.ministryActivities || []).filter((item) => item.id !== removeMinistryActivity.dataset.removeMinistryActivity);
     deleteSupabaseRow("ministry_activities", removeMinistryActivity.dataset.removeMinistryActivity);
     saveState();
@@ -4819,7 +4888,7 @@ document.addEventListener("click", (event) => {
   const toggleMinistryTask = event.target.closest("[data-toggle-ministry-task]");
   if (toggleMinistryTask && canManage("ministries")) {
     const task = (state.ministryTasks || []).find((item) => item.id === toggleMinistryTask.dataset.toggleMinistryTask);
-    if (task) {
+    if (task && canAccessMinistryDepartment(task.department)) {
       task.done = !task.done;
       task.updatedAt = new Date().toISOString();
       saveState();
@@ -4829,6 +4898,8 @@ document.addEventListener("click", (event) => {
 
   const removeMinistryTask = event.target.closest("[data-remove-ministry-task]");
   if (removeMinistryTask && canManage("ministries")) {
+    const task = (state.ministryTasks || []).find((item) => item.id === removeMinistryTask.dataset.removeMinistryTask);
+    if (!task || !canAccessMinistryDepartment(task.department)) return;
     state.ministryTasks = (state.ministryTasks || []).filter((item) => item.id !== removeMinistryTask.dataset.removeMinistryTask);
     deleteSupabaseRow("ministry_tasks", removeMinistryTask.dataset.removeMinistryTask);
     saveState();
