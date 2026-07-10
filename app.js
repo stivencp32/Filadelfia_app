@@ -56,6 +56,28 @@ const roleDepartments = {
 };
 
 const DEFAULT_ORG_LOGO = "./assets/filadelfia-logo-dark.jpeg";
+const BIBLE_API_BASE = "https://www.abibliadigital.com.br/api";
+const BIBLE_VERSIONS = [
+  { id: "nvi", label: "NVI" },
+  { id: "ra", label: "RA" },
+  { id: "acf", label: "ACF" }
+];
+const BIBLE_BOOKS = [
+  ["gn", "Gênesis", 50], ["ex", "Êxodo", 40], ["lv", "Levítico", 27], ["nm", "Números", 36], ["dt", "Deuteronômio", 34],
+  ["js", "Josué", 24], ["jz", "Juízes", 21], ["rt", "Rute", 4], ["1sm", "1 Samuel", 31], ["2sm", "2 Samuel", 24],
+  ["1rs", "1 Reis", 22], ["2rs", "2 Reis", 25], ["1cr", "1 Crônicas", 29], ["2cr", "2 Crônicas", 36], ["ed", "Esdras", 10],
+  ["ne", "Neemias", 13], ["et", "Ester", 10], ["jó", "Jó", 42], ["sl", "Salmos", 150], ["pv", "Provérbios", 31],
+  ["ec", "Eclesiastes", 12], ["ct", "Cânticos", 8], ["is", "Isaías", 66], ["jr", "Jeremias", 52], ["lm", "Lamentações", 5],
+  ["ez", "Ezequiel", 48], ["dn", "Daniel", 12], ["os", "Oséias", 14], ["jl", "Joel", 3], ["am", "Amós", 9],
+  ["ob", "Obadias", 1], ["jn", "Jonas", 4], ["mq", "Miquéias", 7], ["na", "Naum", 3], ["hc", "Habacuque", 3],
+  ["sf", "Sofonias", 3], ["ag", "Ageu", 2], ["zc", "Zacarias", 14], ["ml", "Malaquias", 4], ["mt", "Mateus", 28],
+  ["mc", "Marcos", 16], ["lc", "Lucas", 24], ["jo", "João", 21], ["at", "Atos", 28], ["rm", "Romanos", 16],
+  ["1co", "1 Coríntios", 16], ["2co", "2 Coríntios", 13], ["gl", "Gálatas", 6], ["ef", "Efésios", 6], ["fp", "Filipenses", 4],
+  ["cl", "Colossenses", 4], ["1ts", "1 Tessalonicenses", 5], ["2ts", "2 Tessalonicenses", 3], ["1tm", "1 Timóteo", 6],
+  ["2tm", "2 Timóteo", 4], ["tt", "Tito", 3], ["fm", "Filemom", 1], ["hb", "Hebreus", 13], ["tg", "Tiago", 5],
+  ["1pe", "1 Pedro", 5], ["2pe", "2 Pedro", 3], ["1jo", "1 João", 5], ["2jo", "2 João", 1], ["3jo", "3 João", 1],
+  ["jd", "Judas", 1], ["ap", "Apocalipse", 22]
+].map(([abbrev, name, chapters]) => ({ abbrev, name, chapters }));
 
 const departmentRoles = {
   "Louvor": [
@@ -248,6 +270,17 @@ let activeMinistryDepartment = "";
 let financeEvolutionMode = "month";
 let financeReportMode = "dre";
 let memberAppView = "home";
+let memberBibleState = {
+  version: "nvi",
+  book: "sl",
+  chapter: 23,
+  verse: "",
+  search: "",
+  mode: "chapter",
+  loading: false,
+  result: null,
+  error: ""
+};
 let usersPage = 1;
 let membersPage = 1;
 let financePage = 1;
@@ -1666,7 +1699,7 @@ function ensureLiveMemberAppLayout() {
         <section class="member-live-content-panel">
           <div class="shortcut-row">
             <button type="button" data-member-app-view="agenda"><i data-lucide="calendar"></i><span>Agenda</span></button>
-            <button type="button" id="memberBibleButton"><i data-lucide="book-open"></i><span>B\u00edblia</span></button>
+            <button type="button" data-member-app-view="bible"><i data-lucide="book-open"></i><span>B\u00edblia</span></button>
             <button type="button" data-member-app-view="offerings"><i data-lucide="hand-heart"></i><span>Ofertas</span></button>
             <button type="button" data-member-app-view="card"><i data-lucide="qr-code"></i><span>Carteirinha</span></button>
           </div>
@@ -2858,7 +2891,7 @@ function mobileContentItems() {
     { icon: "calendar-days", title: "Agenda de eventos", meta: activeEvents.length ? `${activeEvents.length} evento(s) em destaque` : "Nenhum evento publicado no momento" },
     { icon: "hand-heart", title: "Minhas ofertas e dízimos", meta: memberFinanceTotal ? formatCurrency(memberFinanceTotal) : "Suas contribuições aparecerão aqui" },
     { icon: "cake", title: "Aniversariantes", meta: birthdays.length ? birthdays.map((person) => person.name).join(", ") : "Nenhum aniversariante publicado este mes" },
-    { icon: "book-open", title: "Bíblia", meta: settings.bibleLink ? "Abrir Bíblia" : "Aguardando integração com API" },
+    { icon: "book-open", title: "Bíblia", meta: "Leitura e busca por palavra" },
     { icon: "badge-check", title: "Carteirinha", meta: member?.registration ? `Matrícula ${member.registration}` : "Cadastro ativo" },
     ...activeEvents.map((event) => ({
       icon: "calendar-days",
@@ -2970,6 +3003,7 @@ function renderMemberLiveView() {
   const renderers = {
     home: renderMemberHomeView,
     agenda: renderMemberAgendaView,
+    bible: renderMemberBibleView,
     offerings: renderMemberOfferingsView,
     card: renderMemberCardView,
     profile: renderMemberProfileEditView
@@ -2977,6 +3011,7 @@ function renderMemberLiveView() {
   const labels = {
     home: "Comunicados",
     agenda: "Agenda",
+    bible: "Bíblia",
     offerings: "Ofertas e d\u00edzimos",
     card: "Carteirinha",
     profile: "Editar cadastro"
@@ -3027,6 +3062,168 @@ function renderMemberAgendaView() {
       </article>
     `).join("")}</div>`
     : `<div class="member-live-empty"><i data-lucide="calendar-days"></i><strong>Nenhum evento publicado</strong><span>A agenda da igreja aparecer\u00e1 aqui.</span></div>`;
+}
+
+function bibleBookByAbbrev(abbrev = memberBibleState.book) {
+  return BIBLE_BOOKS.find((book) => book.abbrev === abbrev) || BIBLE_BOOKS[0];
+}
+
+function bibleChapterOptionsHtml(bookAbbrev, selectedChapter) {
+  const book = bibleBookByAbbrev(bookAbbrev);
+  return Array.from({ length: book.chapters }, (_, index) => {
+    const chapter = index + 1;
+    return `<option value="${chapter}" ${Number(selectedChapter) === chapter ? "selected" : ""}>${chapter}</option>`;
+  }).join("");
+}
+
+function bibleReferenceLabel(item) {
+  if (!item) return "";
+  const bookName = item.book?.name || bibleBookByAbbrev(item.book?.abbrev?.pt || item.book?.abbrev)?.name || "";
+  const chapter = item.chapter?.number || item.chapter || "";
+  const number = item.number || "";
+  return [bookName, chapter && number ? `${chapter}:${number}` : chapter].filter(Boolean).join(" ");
+}
+
+function bibleRequestHeaders() {
+  return {
+    Accept: "application/json"
+  };
+}
+
+async function requestBibleJson(path, options = {}) {
+  const response = await fetch(`${BIBLE_API_BASE}${path}`, {
+    ...options,
+    headers: {
+      ...bibleRequestHeaders(),
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...(options.headers || {})
+    }
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok || data?.msg || data?.err) {
+    throw new Error(data?.msg || "Nao foi possivel consultar A Biblia Digital agora.");
+  }
+  return data;
+}
+
+function renderBibleResult() {
+  const { result, loading, error, mode } = memberBibleState;
+  if (loading) {
+    return `<div class="member-live-empty bible-loading"><i data-lucide="loader-circle"></i><strong>Carregando Bíblia</strong><span>Consultando A Bíblia Digital...</span></div>`;
+  }
+  if (error) {
+    return `<div class="member-live-empty bible-error"><i data-lucide="circle-alert"></i><strong>Não foi possível carregar</strong><span>${escapeHtml(error)}</span></div>`;
+  }
+  if (!result) {
+    return `<div class="member-live-empty"><i data-lucide="book-open"></i><strong>Escolha uma leitura</strong><span>Selecione livro e capítulo, busque uma palavra ou receba um versículo aleatório.</span></div>`;
+  }
+  if (mode === "search") {
+    const verses = result.verses || [];
+    return `
+      <section class="bible-result-heading">
+        <strong>${escapeHtml(result.occurrence || verses.length || 0)} ocorrências</strong>
+        <span>${escapeHtml((result.version || memberBibleState.version).toUpperCase())}</span>
+      </section>
+      <div class="bible-verse-list">
+        ${verses.slice(0, 30).map((verse) => `
+          <article class="bible-verse-card">
+            <strong>${escapeHtml(bibleReferenceLabel(verse))}</strong>
+            <p>${escapeHtml(verse.text || "")}</p>
+          </article>
+        `).join("") || `<div class="member-live-empty"><strong>Nada encontrado</strong><span>Tente outra palavra de busca.</span></div>`}
+      </div>
+    `;
+  }
+  if (result.verses) {
+    return `
+      <section class="bible-result-heading">
+        <strong>${escapeHtml(`${result.book?.name || bibleBookByAbbrev().name} ${result.chapter?.number || memberBibleState.chapter}`)}</strong>
+        <span>${escapeHtml((result.book?.version || memberBibleState.version).toUpperCase())}</span>
+      </section>
+      <div class="bible-verse-list">
+        ${result.verses.map((verse) => `
+          <article class="bible-verse-line">
+            <sup>${escapeHtml(verse.number)}</sup>
+            <p>${escapeHtml(verse.text || "")}</p>
+          </article>
+        `).join("")}
+      </div>
+    `;
+  }
+  return `
+    <section class="bible-featured-verse">
+      <span>${escapeHtml((result.book?.version || memberBibleState.version).toUpperCase())}</span>
+      <strong>${escapeHtml(bibleReferenceLabel(result))}</strong>
+      <p>${escapeHtml(result.text || "")}</p>
+    </section>
+  `;
+}
+
+function renderMemberBibleView() {
+  const { version, book, chapter, verse, search } = memberBibleState;
+  return `
+    <section class="member-bible-panel">
+      <form class="bible-reader-form" id="memberBibleReaderForm">
+        <label>Versão
+          <select name="version">
+            ${BIBLE_VERSIONS.map((item) => `<option value="${item.id}" ${item.id === version ? "selected" : ""}>${item.label}</option>`).join("")}
+          </select>
+        </label>
+        <label>Livro
+          <select name="book">
+            ${BIBLE_BOOKS.map((item) => `<option value="${item.abbrev}" ${item.abbrev === book ? "selected" : ""}>${item.name}</option>`).join("")}
+          </select>
+        </label>
+        <label>Capítulo
+          <select name="chapter">${bibleChapterOptionsHtml(book, chapter)}</select>
+        </label>
+        <label>Versículo
+          <input name="verse" inputmode="numeric" pattern="[0-9]*" placeholder="Todos" value="${escapeHtml(verse)}" />
+        </label>
+        <button class="save" type="submit"><i data-lucide="book-open-check"></i> Ler</button>
+        <button class="outline" type="button" id="memberBibleRandomButton"><i data-lucide="shuffle"></i> Aleatório</button>
+      </form>
+      <form class="bible-search-form" id="memberBibleSearchForm">
+        <label>Buscar palavra
+          <input name="search" placeholder="Ex.: amor, fé, esperança" value="${escapeHtml(search)}" />
+        </label>
+        <button class="outline" type="submit"><i data-lucide="search"></i> Buscar</button>
+      </form>
+      <small class="bible-api-note">A Bíblia Digital limita acessos anônimos; se a API estiver indisponível, tente novamente em instantes.</small>
+      <div class="bible-result">${renderBibleResult()}</div>
+    </section>
+  `;
+}
+
+async function loadBiblePassage({ random = false, search = "" } = {}) {
+  memberBibleState.loading = true;
+  memberBibleState.error = "";
+  memberBibleState.result = null;
+  renderMemberLiveView();
+  try {
+    const version = memberBibleState.version;
+    if (search) {
+      memberBibleState.mode = "search";
+      memberBibleState.result = await requestBibleJson("/verses/search", {
+        method: "POST",
+        body: JSON.stringify({ version, search })
+      });
+    } else if (random) {
+      memberBibleState.mode = "verse";
+      memberBibleState.result = await requestBibleJson(`/verses/${encodeURIComponent(version)}/random`);
+    } else {
+      const book = encodeURIComponent(memberBibleState.book);
+      const chapter = encodeURIComponent(memberBibleState.chapter);
+      const verse = String(memberBibleState.verse || "").trim();
+      memberBibleState.mode = verse ? "verse" : "chapter";
+      memberBibleState.result = await requestBibleJson(`/verses/${encodeURIComponent(version)}/${book}/${chapter}${verse ? `/${encodeURIComponent(verse)}` : ""}`);
+    }
+  } catch (error) {
+    memberBibleState.error = error.message || "Nao foi possivel consultar A Biblia Digital agora.";
+  } finally {
+    memberBibleState.loading = false;
+    renderMemberLiveView();
+  }
 }
 
 function renderMemberOfferingsView() {
@@ -5087,6 +5284,22 @@ document.querySelector("#memberForm")?.addEventListener("input", (event) => {
   }
 });
 
+document.addEventListener("change", (event) => {
+  if (!event.target.closest("#memberBibleReaderForm")) return;
+  const form = event.target.form;
+  if (!form) return;
+  const data = formData(form);
+  const book = bibleBookByAbbrev(data.book);
+  memberBibleState = {
+    ...memberBibleState,
+    version: data.version || memberBibleState.version,
+    book: book.abbrev,
+    chapter: Math.min(Math.max(Number(data.chapter || 1), 1), book.chapters),
+    verse: String(data.verse || "").replace(/\D/g, "")
+  };
+  renderMemberLiveView();
+});
+
 document.querySelector("#inviteForm")?.addEventListener("change", (event) => {
   if (event.target.name === "department") renderMemberFunctionOptions("", "#inviteForm", "#adminInviteFunctionSelect");
 });
@@ -5131,6 +5344,37 @@ document.addEventListener("focusin", (event) => {
 });
 
 document.addEventListener("submit", async (event) => {
+  if (event.target.id === "memberBibleReaderForm") {
+    event.preventDefault();
+    const data = formData(event.target);
+    const book = bibleBookByAbbrev(data.book);
+    memberBibleState = {
+      ...memberBibleState,
+      version: data.version || "nvi",
+      book: book.abbrev,
+      chapter: Math.min(Math.max(Number(data.chapter || 1), 1), book.chapters),
+      verse: String(data.verse || "").replace(/\D/g, ""),
+      search: ""
+    };
+    await loadBiblePassage();
+    return;
+  }
+
+  if (event.target.id === "memberBibleSearchForm") {
+    event.preventDefault();
+    const data = formData(event.target);
+    const search = String(data.search || "").trim();
+    if (!search) {
+      memberBibleState.error = "Digite uma palavra para buscar.";
+      memberBibleState.result = null;
+      renderMemberLiveView();
+      return;
+    }
+    memberBibleState = { ...memberBibleState, search };
+    await loadBiblePassage({ search });
+    return;
+  }
+
   if (event.target.id !== "memberProfileForm") return;
   event.preventDefault();
   const session = memberSession();
@@ -5268,6 +5512,7 @@ document.addEventListener("click", (event) => {
   if (memberAppButton && document.body.classList.contains("is-member-app")) {
     memberAppView = memberAppButton.dataset.memberAppView || "home";
     renderMemberLiveView();
+    if (memberAppView === "bible" && !memberBibleState.result && !memberBibleState.loading) loadBiblePassage();
     document.querySelector(".member-live-content-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -5373,7 +5618,7 @@ document.addEventListener("click", (event) => {
   if (event.target.closest("#openMemberAppButton")) showMemberApp({ type: "admin", userId: currentUser()?.id, signedAt: new Date().toISOString() });
   if (event.target.closest("#memberAdminButton") && currentUser()) showAdmin();
   if (event.target.closest("#memberLogoutButton")) signOutEverywhere();
-  if (event.target.closest("#memberBibleButton, #memberBibleNavButton") && state.settings.bibleLink) window.open(state.settings.bibleLink, "_blank", "noopener");
+  if (event.target.closest("#memberBibleRandomButton")) loadBiblePassage({ random: true });
   if (event.target.closest("#printMemberCardButton")) window.print();
 
   const detailEvent = event.target.closest("[data-detail-event]");
