@@ -2972,6 +2972,26 @@ function ministryMemberOptions(department = "") {
   ].join("");
 }
 
+function ministryResponsibleOptions(department = "") {
+  const normalizedDepartment = String(department || "").trim().toLowerCase();
+  const people = financePeople()
+    .filter((person) => !normalizedDepartment || String(person.department || "").trim().toLowerCase() === normalizedDepartment)
+    .concat(
+      normalizedDepartment
+        ? financePeople().filter((person) => String(person.department || "").trim().toLowerCase() !== normalizedDepartment)
+        : []
+    );
+  const seen = new Set();
+  return people.map((person) => {
+    const value = person.name || "";
+    const key = `${String(value).trim().toLowerCase()}|${person.registration || ""}`;
+    if (!value || seen.has(key)) return "";
+    seen.add(key);
+    const detail = [person.ministryRole, person.department, person.registration ? `Mat. ${person.registration}` : ""].filter(Boolean).join(" - ");
+    return `<option value="${escapeHtml(value)}" label="${escapeHtml(detail)}"></option>`;
+  }).join("");
+}
+
 function renderMinistries() {
   const list = document.querySelector("#ministryDepartmentList");
   const workspace = document.querySelector("#ministryWorkspace");
@@ -3130,11 +3150,12 @@ function renderMinistryActivityForm(department) {
 }
 
 function renderMinistryTaskForm(department) {
+  const listId = `ministryTaskOwnerOptions-${String(department || "all").replace(/[^a-z0-9_-]/gi, "-")}`;
   return `
     <form class="ministry-inline-form" id="ministryTaskForm">
       <input type="hidden" name="department" value="${escapeHtml(department)}" />
       <label>Tarefa<input name="title" required placeholder="Ex: Revisar escala do domingo" /></label>
-      <label>Responsável<input name="owner" placeholder="Nome ou função" /></label>
+      <label>Responsável<input name="owner" list="${escapeHtml(listId)}" autocomplete="off" placeholder="Digite o nome do membro" /><datalist id="${escapeHtml(listId)}">${ministryResponsibleOptions(department)}</datalist></label>
       <label>Prazo<input name="dueDate" type="date" /></label>
       <label>Prioridade<select name="priority"><option>Normal</option><option>Alta</option><option>Baixa</option></select></label>
       <label class="span-2">Observações<textarea name="notes" rows="2"></textarea></label>
