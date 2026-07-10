@@ -2625,6 +2625,16 @@ function memberMapEntries() {
   ].filter((member) => memberAddressQuery(member));
 }
 
+function spreadMapPoint(lat, lng, index, total) {
+  if (total <= 1) return { lat, lng };
+  const angle = (Math.PI * 2 * index) / total;
+  const radius = 0.00018 + Math.min(total, 12) * 0.000015;
+  return {
+    lat: lat + Math.sin(angle) * radius,
+    lng: lng + Math.cos(angle) * radius
+  };
+}
+
 function renderMemberMap() {
   const panel = document.querySelector("#memberMapPanel");
   const mapNode = document.querySelector("#memberMap");
@@ -2647,19 +2657,31 @@ function renderMemberMap() {
     .map((member) => ({ member, lat: parseCoordinate(member.lat), lng: parseCoordinate(member.lng) }))
     .filter((item) => Number.isFinite(item.lat) && Number.isFinite(item.lng));
 
-  positioned.forEach(({ member, lat, lng }) => {
+  const grouped = new Map();
+  positioned.forEach((item) => {
+    const key = `${item.lat.toFixed(6)},${item.lng.toFixed(6)}`;
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(item);
+  });
+
+  positioned.forEach(({ member, lat, lng }, index) => {
+    const group = grouped.get(`${lat.toFixed(6)},${lng.toFixed(6)}`) || [];
+    const groupIndex = group.findIndex((item) => item.member._key === member._key);
+    const point = spreadMapPoint(lat, lng, groupIndex >= 0 ? groupIndex : index, group.length);
     const popup = `
       <strong>${escapeHtml(member.name || "Membro")}</strong><br>
       ${escapeHtml([member.status, member.source].filter(Boolean).join(" - "))}<br>
       <small>${escapeHtml(memberAddressQuery(member).replace(/, Brasil$/, ""))}</small>
+      ${group.length > 1 ? `<br><small>${group.length} pessoas neste mesmo endereço/região.</small>` : ""}
     `;
-    L.marker([lat, lng]).addTo(memberMarkers).bindPopup(popup);
+    L.marker([point.lat, point.lng]).addTo(memberMarkers).bindPopup(popup);
   });
 
   if (positioned.length > 0) {
     const bounds = L.latLngBounds(positioned.map((item) => [item.lat, item.lng]));
     memberMap.fitBounds(bounds.pad(0.22), { maxZoom: 14 });
-    if (note) note.textContent = `${positioned.length} pessoa(s) posicionada(s) no mapa.`;
+    const pending = entries.length - positioned.length;
+    if (note) note.textContent = `${positioned.length} pessoa(s) posicionada(s) no mapa em ${grouped.size} região(ões)${pending > 0 ? `; ${pending} endereço(s) ainda localizando.` : "."}`;
   } else {
     memberMap.setView(defaultCenter, 11);
     if (note) note.textContent = entries.length ? "Localizando endereços cadastrados..." : "Cadastre endereços para visualizar a distribuição.";
@@ -2694,6 +2716,7 @@ async function geocodeMissingMembers() {
     if (note) note.textContent = "Não foi possível localizar automaticamente alguns endereços.";
   } finally {
     geocodingMemberIds.delete(member._key);
+    window.setTimeout(() => geocodeMissingMembers(), 900);
   }
 }
 
