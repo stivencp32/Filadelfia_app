@@ -13,7 +13,7 @@
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script defer src="./app-config.js?v=20260630-26"></script>
     <script defer src="./supabase.config.js?v=20260630-27"></script>
-    <script defer src="./app.js?v=20260710-member-map-spread-1"></script>
+    <script defer src="./app.js?v=20260710-member-cep-1"></script>
   </head>
   <body class="is-auth-screen">
     <div class="app-toast" id="appToast" role="status" aria-live="polite" hidden></div>
@@ -404,11 +404,11 @@
                     <input type="hidden" name="photo" id="memberPhotoData" />
                     <label>Matrícula<input name="registration" placeholder="Gerada automaticamente" readonly /></label>
                     <label>Igreja<select name="churchId" id="memberChurchSelect"></select></label>
+                    <label>CEP<input name="zip" placeholder="00000-000" inputmode="numeric" autocomplete="postal-code" /></label>
                     <label class="span-2">Endereço<input name="address" placeholder="Rua, número e complemento" /></label>
                     <label>Bairro<input name="neighborhood" placeholder="Bairro" /></label>
                     <label>Cidade<input name="city" placeholder="Cidade" /></label>
                     <label>UF<input name="state" maxlength="2" placeholder="RJ" /></label>
-                    <label>CEP<input name="zip" placeholder="00000-000" /></label>
                     <input type="hidden" name="lat" />
                     <input type="hidden" name="lng" />
                     <label>Departamento<select name="department" id="memberDepartmentSelect"></select></label>

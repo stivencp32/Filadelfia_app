@@ -262,6 +262,7 @@ const geocodingMemberIds = new Set();
 let activeOrganizationId = window.FILADELFIA_SUPABASE?.defaultOrganizationId || "";
 let filadelfiaSupabaseClient = null;
 let memberAddressColumnsAvailable = null;
+let memberCepLookupTimer = null;
 
 const authScreen = document.querySelector("#authScreen");
 const publicScreen = document.querySelector("#publicScreen");
@@ -2471,6 +2472,61 @@ function churchAddressQuery(church) {
 function memberAddressQuery(member) {
   const parts = [member.address, member.neighborhood, member.city, member.state, member.zip].filter(Boolean);
   return parts.length ? [...parts, "Brasil"].join(", ") : "";
+}
+
+function cepDigits(value) {
+  return String(value || "").replace(/\D/g, "").slice(0, 8);
+}
+
+function formatCep(value) {
+  const digits = cepDigits(value);
+  return digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
+}
+
+async function lookupCep(cep) {
+  const digits = cepDigits(cep);
+  if (digits.length !== 8) return { ok: false, message: "CEP precisa ter 8 dígitos." };
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 5000);
+  try {
+    const response = await fetch(`https://viacep.com.br/ws/${digits}/json/`, {
+      headers: { Accept: "application/json" },
+      signal: controller.signal
+    });
+    if (!response.ok) return { ok: false, message: "Não foi possível consultar o CEP agora." };
+    const data = await response.json();
+    if (data.erro) return { ok: false, message: "CEP não encontrado." };
+    return { ok: true, data };
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+async function fillMemberAddressFromCep(input) {
+  const form = input.closest("form");
+  if (!form) return;
+  const digits = cepDigits(input.value);
+  input.value = formatCep(input.value);
+  if (digits.length !== 8) return;
+  showAppToast("Buscando endereço pelo CEP...");
+  try {
+    const result = await lookupCep(digits);
+    if (!result.ok) {
+      showAppToast(result.message, "warning");
+      return;
+    }
+    const data = result.data;
+    if (data.logradouro) form.elements.address.value = data.logradouro;
+    if (data.bairro) form.elements.neighborhood.value = data.bairro;
+    if (data.localidade) form.elements.city.value = data.localidade;
+    if (data.uf) form.elements.state.value = data.uf;
+    form.elements.lat.value = "";
+    form.elements.lng.value = "";
+    showAppToast("Endereço preenchido pelo CEP.");
+  } catch (error) {
+    console.warn("CEP lookup failed:", error.message);
+    showAppToast("Não foi possível buscar o CEP agora.", "warning");
+  }
 }
 
 async function geocodeChurchAddress(church) {
@@ -5019,6 +5075,16 @@ document.querySelector("#eventForm")?.addEventListener("input", (event) => {
 
 document.querySelector("#memberForm")?.addEventListener("change", (event) => {
   if (event.target.name === "department") renderMemberFunctionOptions();
+  if (event.target.name === "zip") fillMemberAddressFromCep(event.target);
+});
+
+document.querySelector("#memberForm")?.addEventListener("input", (event) => {
+  if (event.target.name !== "zip") return;
+  event.target.value = formatCep(event.target.value);
+  window.clearTimeout(memberCepLookupTimer);
+  if (cepDigits(event.target.value).length === 8) {
+    memberCepLookupTimer = window.setTimeout(() => fillMemberAddressFromCep(event.target), 450);
+  }
 });
 
 document.querySelector("#inviteForm")?.addEventListener("change", (event) => {
@@ -5473,7 +5539,7 @@ document.addEventListener("click", (event) => {
         const field = form.elements[key];
         if (!field) return;
         if (field.type === "checkbox") field.checked = value === true || value === "on";
-        else field.value = value ?? "";
+        else field.value = key === "zip" ? formatCep(value) : value ?? "";
       });
       renderMemberFunctionOptions(member.ministryRole || "");
       openMemberModal(source === "public" ? "Revisar cadastro recebido" : "Editar membro");
