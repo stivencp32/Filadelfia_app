@@ -1678,40 +1678,42 @@ function ensureLiveMemberAppLayout() {
   memberApp.innerHTML = `
     <div class="member-live-app">
       <header class="member-live-header">
-        <strong data-church-short-name>Filad\u00e9lfia</strong>
+        <div class="member-live-brand">
+          <div class="member-phone-logo-fallback brand-mark"><span>F</span></div>
+          <strong data-church-short-name>Filad\u00e9lfia</strong>
+        </div>
         <div class="member-live-header-actions">
           <button class="member-menu-button" id="memberAdminButton" type="button" hidden><i data-lucide="layout-dashboard"></i><span>Gest\u00e3o</span></button>
           <button class="member-menu-button member-logout-button" id="memberLogoutButton" type="button"><i data-lucide="log-out"></i><span>Sair</span></button>
         </div>
       </header>
       <main class="member-live-main">
-        <section class="member-live-hero-panel">
+        <section class="member-live-welcome-panel">
           <div class="member-greeting">
             <span id="memberWelcomeName">Bem-vindo</span>
             <small>Seu acesso de membro est\u00e1 ativo.</small>
           </div>
-          <label class="app-search"><i data-lucide="search"></i><input id="memberAppSearch" value="Assembleia" readonly /></label>
-          <div class="app-hero app-hero-empty">
-            <img id="memberPhoneLogoImage" alt="" hidden />
-            <div class="member-phone-logo-fallback brand-mark"><span>F</span></div>
-            <span id="memberPhoneHeroTitle">Bem-vindo</span>
-            <small id="memberPhoneHeroSubtitle"></small>
-          </div>
+          <div class="member-live-chip"><i data-lucide="church"></i><span id="memberAppSearch">Assembleia</span></div>
         </section>
-        <section class="member-live-content-panel">
-          <div class="shortcut-row">
+        <section class="member-live-shell">
+          <nav class="member-live-nav" aria-label="Menu do membro">
+            <button type="button" data-member-app-view="home"><i data-lucide="messages-square"></i><span>Comunicados</span></button>
             <button type="button" data-member-app-view="agenda"><i data-lucide="calendar"></i><span>Agenda</span></button>
             <button type="button" data-member-app-view="bible"><i data-lucide="book-open"></i><span>B\u00edblia</span></button>
             <button type="button" data-member-app-view="offerings"><i data-lucide="hand-heart"></i><span>Ofertas</span></button>
             <button type="button" data-member-app-view="card"><i data-lucide="qr-code"></i><span>Carteirinha</span></button>
-          </div>
+          </nav>
+          <div class="member-live-content-panel">
           <div class="phone-banner" id="memberPhoneBanner" hidden></div>
           <div class="member-live-view-toolbar">
-            <button type="button" data-member-app-view="home" hidden><i data-lucide="arrow-left"></i> Voltar</button>
-            <h2 id="memberLiveViewTitle">Comunicados</h2>
+            <div>
+              <span id="memberLiveViewKicker">App do membro</span>
+              <h2 id="memberLiveViewTitle">Comunicados</h2>
+            </div>
           </div>
           <div class="member-live-notice" id="memberLiveNotice" role="status" hidden></div>
           <div id="memberLiveView"></div>
+          </div>
         </section>
       </main>
     </div>
@@ -2949,7 +2951,7 @@ function renderMobileApp() {
   setText("#memberPhoneHeroTitle", settings.mobileHeroTitle || "Bem-vindo");
   setText("#memberPhoneHeroSubtitle", settings.mobileHeroSubtitle || "");
   setText("#memberApp [data-church-short-name]", settings.shortName || settings.churchName || "Filadelfia");
-  setValue("#memberAppSearch", settings.shortName || settings.churchName || "Assembleia");
+  setText("#memberAppSearch", settings.shortName || settings.churchName || "Assembleia");
 
   const banner = document.querySelector("#phoneBanner");
   if (banner) {
@@ -3000,8 +3002,7 @@ function renderMemberLiveView() {
   const container = document.querySelector("#memberLiveView");
   if (!container) return;
   const title = document.querySelector("#memberLiveViewTitle");
-  const backButton = document.querySelector(".member-live-view-toolbar [data-member-app-view='home']");
-  if (backButton) backButton.hidden = memberAppView === "home";
+  const kicker = document.querySelector("#memberLiveViewKicker");
   const renderers = {
     home: renderMemberHomeView,
     agenda: renderMemberAgendaView,
@@ -3019,6 +3020,10 @@ function renderMemberLiveView() {
     profile: "Editar cadastro"
   };
   if (title) title.textContent = labels[memberAppView] || labels.home;
+  if (kicker) kicker.textContent = memberAppView === "home" ? "Novidades da igreja" : "Área do membro";
+  document.querySelectorAll(".member-live-nav [data-member-app-view]").forEach((button) => {
+    button.classList.toggle("is-selected", button.dataset.memberAppView === memberAppView);
+  });
   container.innerHTML = (renderers[memberAppView] || renderers.home)();
   if (memberAppView === "card") renderMemberCardQr();
   if (window.lucide) window.lucide.createIcons();
