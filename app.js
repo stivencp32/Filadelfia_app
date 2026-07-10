@@ -1099,8 +1099,8 @@ async function saveChurchUnit(church) {
   try {
     const organizationId = await resolveOrganizationId(client);
     if (!organizationId) return { supabase: false, local: false, error: { message: "Organização não encontrada no Supabase." } };
-    const { data: sessionData } = await client.auth.getSession();
-    if (!sessionData?.session) return { supabase: false, local: false, error: { message: "Sessão expirada. Entre novamente para salvar no banco." } };
+    const sessionResult = await ensureSupabaseSession();
+    if (!sessionResult.session) return { supabase: false, local: false, error: sessionResult.error || { message: "Sessão expirada. Entre novamente para salvar no banco." } };
     const result = await client
       .from("church_units")
       .upsert(stateChurchToDb(church), { onConflict: "id" })
@@ -4064,6 +4064,23 @@ async function signInSupabase(email, password) {
   if (!client) return { user: null, session: null, error: null };
   const result = await client.auth.signInWithPassword({ email, password });
   return { user: result.data?.user || null, session: result.data?.session || null, error: result.error || null };
+}
+
+async function ensureSupabaseSession() {
+  const client = supabaseClient();
+  if (!client) return { user: null, session: null, error: null };
+  const current = await client.auth.getSession();
+  if (current.data?.session) return { user: current.data.session.user, session: current.data.session, error: null };
+  const user = currentUser();
+  if (!user?.email || !user?.password) {
+    return { user: null, session: null, error: { message: "Sessão expirada. Entre novamente para salvar no banco." } };
+  }
+  const result = await signInSupabase(user.email, user.password);
+  if (result.user && !user.authUserId) {
+    user.authUserId = result.user.id;
+    saveLocalStateOnly();
+  }
+  return result;
 }
 
 document.querySelectorAll("[data-auth-tab]").forEach((button) => {
