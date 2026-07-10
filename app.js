@@ -2306,6 +2306,22 @@ function closeFinanceReportsModal() {
   document.body.classList.remove("modal-open");
 }
 
+function openKidsChildModal(title = "Cadastrar criança") {
+  const modal = document.querySelector("#kidsChildModal");
+  if (!modal) return;
+  setText("#kidsChildModalTitle", title);
+  modal.hidden = false;
+  document.body.classList.add("modal-open");
+  window.setTimeout(() => document.querySelector("#kidsChildForm [name='name']")?.focus(), 0);
+}
+
+function closeKidsChildModal() {
+  const modal = document.querySelector("#kidsChildModal");
+  if (!modal) return;
+  modal.hidden = true;
+  document.body.classList.remove("modal-open");
+}
+
 function normalizeFinanceReportButtons() {
   const openButton = document.querySelector("#openFinanceReportsButton");
   if (openButton) openButton.lastChild.textContent = " Relatórios";
@@ -2817,6 +2833,9 @@ function renderKids() {
   const totalNode = document.querySelector("#kidsTotalCount");
   if (!totalNode) return;
   const children = state.kidsChildren || [];
+  const mayManage = canManage("kids");
+  const openButton = document.querySelector("#openKidsChildFormButton");
+  if (openButton) openButton.hidden = !mayManage;
   const today = todayKey();
   const todayCheckins = (state.kidsCheckins || []).filter((checkin) => String(checkin.checkinAt || "").slice(0, 10) === today);
   const present = todayCheckins.filter((checkin) => !checkin.checkoutAt);
@@ -2843,9 +2862,9 @@ function renderKids() {
           <span>${escapeHtml(child.responsibleName || "Responsável não informado")}${child.responsiblePhone ? ` • ${escapeHtml(child.responsiblePhone)}` : ""}</span>
           <small>${open ? `Entrada hoje às ${escapeHtml(formatTime(open.checkinAt))}` : latest ? `Último registro: ${escapeHtml(formatDate(latest.checkinAt))}` : "Sem check-in registrado"}</small>
         </div>
-        ${open
+        ${mayManage && open
           ? `<button class="outline" data-kids-checkout="${escapeHtml(open.id)}" type="button"><i data-lucide="log-out"></i> Check-out</button>`
-          : `<button class="save" data-kids-checkin="${escapeHtml(child.id)}" type="button"><i data-lucide="log-in"></i> Check-in</button>`}
+          : mayManage ? `<button class="save" data-kids-checkin="${escapeHtml(child.id)}" type="button"><i data-lucide="log-in"></i> Check-in</button>` : ""}
       </article>
     `;
   }).join("") : `
@@ -2865,8 +2884,8 @@ function renderKids() {
         </div>
         <div class="kids-child-actions">
           <span class="kids-status ${open ? "is-present" : ""}">${open ? "Presente" : "Fora da sala"}</span>
-          <button class="table-action" data-edit-kid="${escapeHtml(child.id)}" type="button">Editar</button>
-          <button class="table-action secondary" data-remove-kid="${escapeHtml(child.id)}" type="button">Remover</button>
+          ${mayManage ? `<button class="table-action" data-edit-kid="${escapeHtml(child.id)}" type="button">Editar</button>
+          <button class="table-action secondary" data-remove-kid="${escapeHtml(child.id)}" type="button">Remover</button>` : ""}
         </div>
       </article>
     `;
@@ -5533,6 +5552,7 @@ document.querySelector("#kidsChildForm")?.addEventListener("submit", (event) => 
   saveState();
   event.currentTarget.reset();
   setValue("#kidsChildId", "");
+  closeKidsChildModal();
   renderAll();
   showAppToast(existingIndex >= 0 ? "Cadastro Kids atualizado." : "Criança cadastrada no Kids.");
 });
@@ -5943,6 +5963,12 @@ document.addEventListener("click", (event) => {
     openFinanceModal();
   }
 
+  if (event.target.closest("#openKidsChildFormButton") && canManage("kids")) {
+    document.querySelector("#kidsChildForm")?.reset();
+    setValue("#kidsChildId", "");
+    openKidsChildModal("Cadastrar criança");
+  }
+
   if (event.target.closest("#openFinanceReportsButton") && canManage("finance")) {
     openFinanceReportsModal();
     if (window.lucide) window.lucide.createIcons();
@@ -5951,6 +5977,10 @@ document.addEventListener("click", (event) => {
   if (event.target.closest("#closeFinanceFormButton")) closeFinanceModal();
 
   if (event.target.id === "financeModal") closeFinanceModal();
+
+  if (event.target.closest("#closeKidsChildFormButton")) closeKidsChildModal();
+
+  if (event.target.id === "kidsChildModal") closeKidsChildModal();
 
   if (event.target.closest("#closeFinanceReportsButton")) closeFinanceReportsModal();
 
@@ -6310,8 +6340,7 @@ document.addEventListener("click", (event) => {
         const field = form.elements[key];
         if (field) field.value = value ?? "";
       });
-      form.scrollIntoView({ behavior: "smooth", block: "start" });
-      form.querySelector("[name='name']")?.focus();
+      openKidsChildModal("Editar criança");
     }
   }
 
@@ -6453,6 +6482,7 @@ document.addEventListener("keydown", (event) => {
     closeEventModal();
     closeMinistryFormModal();
     closeFinanceModal();
+    closeKidsChildModal();
     closeFinanceReportsModal();
   }
 });

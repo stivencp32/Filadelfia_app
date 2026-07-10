@@ -1074,25 +1074,38 @@ tbody tr:hover {
   gap: 22px;
 }
 
+.kids-panel .panel-title-row {
+  align-items: flex-start;
+}
+
+.kids-panel .kids-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .kids-summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
   gap: 14px;
 }
 
 .kids-summary article {
+  min-height: 122px;
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 18px;
   background: #f8fbfd;
+  overflow: hidden;
 }
 
 .kids-summary span {
   display: block;
   color: var(--muted);
   font-weight: 800;
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1.2;
   text-transform: uppercase;
+  word-break: normal;
+  overflow-wrap: normal;
 }
 
 .kids-summary strong {
@@ -1108,6 +1121,7 @@ tbody tr:hover {
   border-radius: 10px;
   padding: 24px;
   background: #fff;
+  min-width: 0;
 }
 
 .kids-card h3 {
@@ -1183,6 +1197,7 @@ tbody tr:hover {
   display: block;
   margin-top: 4px;
   color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .kids-child-card {
@@ -1233,6 +1248,18 @@ tbody tr:hover {
 .empty-state.compact {
   min-height: 170px;
   padding: 26px;
+}
+
+.kids-child-modal {
+  max-width: 860px;
+}
+
+.kids-child-modal .form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.kids-child-modal .span-3 {
+  grid-column: 1 / -1;
 }
 
 .alert {
@@ -1681,6 +1708,10 @@ tbody tr:hover {
   .kids-summary,
   .kids-checkin-item,
   .kids-child-card {
+    grid-template-columns: 1fr;
+  }
+
+  .kids-child-modal .form-grid {
     grid-template-columns: 1fr;
   }
 
