@@ -4610,42 +4610,61 @@ document.querySelectorAll("[data-palette]").forEach((button) => {
 
 document.querySelector("#memberForm")?.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (!canManage("members")) return;
-  const data = formData(event.currentTarget);
-  const photo = await readImageFile(event.currentTarget.elements.photoFile?.files?.[0]);
-  if (photo) data.photo = photo;
-  delete data.photoFile;
-  let existingIndex = state.members.findIndex((member) => member.id && member.id === data.id);
-  if (existingIndex < 0 && data.id) existingIndex = state.members.findIndex((member) => member.id === data.id);
-  if (existingIndex < 0 && !data.id) {
-    existingIndex = state.members.findIndex((member) => {
-      const sameRegistration = data.registration && member.registration && member.registration === data.registration;
-      const sameEmail = data.email && member.email && member.email.toLowerCase() === data.email.toLowerCase();
-      const samePhoneAndName = data.phone && member.phone && member.phone === data.phone && String(member.name || "").toLowerCase() === String(data.name || "").toLowerCase();
-      return sameRegistration || sameEmail || samePhoneAndName;
-    });
+  if (!canManage("members")) {
+    showAppToast("Seu acesso não permite salvar membros.", "error");
+    return;
   }
-  const existingId = existingIndex >= 0 ? state.members[existingIndex].id : "";
-  if (!data.registration) data.registration = existingIndex >= 0 ? state.members[existingIndex].registration : nextLocalRegistration();
-  const member = { ...data, id: data.id || existingId || crypto.randomUUID(), updatedAt: new Date().toISOString() };
-  if (existingIndex >= 0) state.members[existingIndex] = member;
-  else state.members.unshift({ ...member, createdAt: new Date().toISOString() });
-  if (event.currentTarget.dataset.memberSource === "public") {
-    const publicIndex = Number(event.currentTarget.dataset.memberIndex);
-    if (Number.isInteger(publicIndex) && state.publicMembers[publicIndex]) state.publicMembers.splice(publicIndex, 1);
-  }
-  const savedMember = state.members.find((item) => item.id === member.id) || member;
-  const saveResult = await saveMemberRecord(savedMember, "admin");
-  event.currentTarget.reset();
-  event.currentTarget.dataset.memberSource = "";
-  event.currentTarget.dataset.memberIndex = "";
-  setValue("#memberId", "");
-  closeMemberModal();
-  renderAll();
-  if (saveResult.supabase === false) {
-    showAppToast(`Membro salvo só neste navegador. Supabase não gravou: ${saveResult.error?.message || "erro sem detalhe"}`, "error");
-  } else {
-    showAppToast("Membro salvo.");
+  const form = event.currentTarget;
+  const submitButton = form.querySelector("button[type='submit']");
+  if (submitButton) submitButton.disabled = true;
+  showAppToast("Salvando membro...");
+  try {
+    const data = formData(form);
+    if (!String(data.name || "").trim()) {
+      form.elements.name?.focus();
+      showAppToast("Informe o nome do membro antes de salvar.", "warning");
+      return;
+    }
+    const photo = await readImageFile(form.elements.photoFile?.files?.[0]);
+    if (photo) data.photo = photo;
+    delete data.photoFile;
+    let existingIndex = state.members.findIndex((member) => member.id && member.id === data.id);
+    if (existingIndex < 0 && data.id) existingIndex = state.members.findIndex((member) => member.id === data.id);
+    if (existingIndex < 0 && !data.id) {
+      existingIndex = state.members.findIndex((member) => {
+        const sameRegistration = data.registration && member.registration && member.registration === data.registration;
+        const sameEmail = data.email && member.email && member.email.toLowerCase() === data.email.toLowerCase();
+        const samePhoneAndName = data.phone && member.phone && member.phone === data.phone && String(member.name || "").toLowerCase() === String(data.name || "").toLowerCase();
+        return sameRegistration || sameEmail || samePhoneAndName;
+      });
+    }
+    const existingId = existingIndex >= 0 ? state.members[existingIndex].id : "";
+    if (!data.registration) data.registration = existingIndex >= 0 ? state.members[existingIndex].registration : nextLocalRegistration();
+    const member = { ...data, id: data.id || existingId || crypto.randomUUID(), updatedAt: new Date().toISOString() };
+    if (existingIndex >= 0) state.members[existingIndex] = member;
+    else state.members.unshift({ ...member, createdAt: new Date().toISOString() });
+    if (form.dataset.memberSource === "public") {
+      const publicIndex = Number(form.dataset.memberIndex);
+      if (Number.isInteger(publicIndex) && state.publicMembers[publicIndex]) state.publicMembers.splice(publicIndex, 1);
+    }
+    const savedMember = state.members.find((item) => item.id === member.id) || member;
+    const saveResult = await saveMemberRecord(savedMember, "admin");
+    form.reset();
+    form.dataset.memberSource = "";
+    form.dataset.memberIndex = "";
+    setValue("#memberId", "");
+    closeMemberModal();
+    renderAll();
+    if (saveResult.supabase === false) {
+      showAppToast(`Membro salvo só neste navegador. Supabase não gravou: ${saveResult.error?.message || "erro sem detalhe"}`, "error");
+    } else {
+      showAppToast("Membro salvo.");
+    }
+  } catch (error) {
+    console.error("Member save failed:", error);
+    showAppToast(`Não foi possível salvar: ${error.message || "erro inesperado"}`, "error");
+  } finally {
+    if (submitButton) submitButton.disabled = false;
   }
 });
 

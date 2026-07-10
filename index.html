@@ -13,7 +13,7 @@
     <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script defer src="./app-config.js?v=20260630-26"></script>
     <script defer src="./supabase.config.js?v=20260630-27"></script>
-    <script defer src="./app.js?v=20260710-member-save-fast-1"></script>
+    <script defer src="./app.js?v=20260710-member-save-feedback-1"></script>
   </head>
   <body class="is-auth-screen">
     <div class="app-toast" id="appToast" role="status" aria-live="polite" hidden></div>
@@ -392,7 +392,7 @@
                   <h2 id="memberModalTitle">Cadastrar membro</h2>
                   <button class="icon-button modal-close" id="closeMemberFormButton" type="button" aria-label="Fechar cadastro"><i data-lucide="x"></i></button>
                 </header>
-                <form class="data-form" id="memberForm">
+                <form class="data-form" id="memberForm" novalidate>
                   <div class="form-grid">
                     <input type="hidden" name="id" id="memberId" />
                     <label>Nome<input name="name" required placeholder="Nome completo" /></label>
