@@ -5562,6 +5562,12 @@ body.is-member-app .member-live-pix {
   padding: 18px;
 }
 
+body.is-member-app .member-live-empty button {
+  width: fit-content;
+  min-height: 40px;
+  margin-top: 12px;
+}
+
 body.is-member-app .member-live-summary strong {
   display: block;
   margin: 4px 0;

@@ -3101,9 +3101,20 @@ async function requestBibleJson(path, options = {}) {
   });
   const data = await response.json().catch(() => null);
   if (!response.ok || data?.msg || data?.err) {
-    throw new Error(data?.msg || "Nao foi possivel consultar A Biblia Digital agora.");
+    throw new Error(friendlyBibleError(data));
   }
   return data;
+}
+
+function friendlyBibleError(data) {
+  const rawMessage = [data?.msg, data?.err?.code, data?.err?.message].filter(Boolean).join(" ");
+  if (/NR_CLOSED|unexpected error|issue|github|Oops/i.test(rawMessage)) {
+    return "A Bíblia Digital está instável neste momento. Tente novamente em alguns instantes.";
+  }
+  if (/rate|limit|too many|429/i.test(rawMessage)) {
+    return "O limite gratuito de consultas foi atingido temporariamente. Tente novamente mais tarde.";
+  }
+  return "Não foi possível consultar A Bíblia Digital agora. Verifique sua conexão e tente novamente.";
 }
 
 function renderBibleResult() {
@@ -3112,7 +3123,14 @@ function renderBibleResult() {
     return `<div class="member-live-empty bible-loading"><i data-lucide="loader-circle"></i><strong>Carregando Bíblia</strong><span>Consultando A Bíblia Digital...</span></div>`;
   }
   if (error) {
-    return `<div class="member-live-empty bible-error"><i data-lucide="circle-alert"></i><strong>Não foi possível carregar</strong><span>${escapeHtml(error)}</span></div>`;
+    return `
+      <div class="member-live-empty bible-error">
+        <i data-lucide="circle-alert"></i>
+        <strong>Não foi possível carregar</strong>
+        <span>${escapeHtml(error)}</span>
+        <button class="outline" type="button" id="memberBibleRetryButton"><i data-lucide="refresh-cw"></i> Tentar novamente</button>
+      </div>
+    `;
   }
   if (!result) {
     return `<div class="member-live-empty"><i data-lucide="book-open"></i><strong>Escolha uma leitura</strong><span>Selecione livro e capítulo, busque uma palavra ou receba um versículo aleatório.</span></div>`;
@@ -5618,6 +5636,7 @@ document.addEventListener("click", (event) => {
   if (event.target.closest("#openMemberAppButton")) showMemberApp({ type: "admin", userId: currentUser()?.id, signedAt: new Date().toISOString() });
   if (event.target.closest("#memberAdminButton") && currentUser()) showAdmin();
   if (event.target.closest("#memberLogoutButton")) signOutEverywhere();
+  if (event.target.closest("#memberBibleRetryButton")) loadBiblePassage();
   if (event.target.closest("#memberBibleRandomButton")) loadBiblePassage({ random: true });
   if (event.target.closest("#printMemberCardButton")) window.print();
 
