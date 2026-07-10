@@ -5593,7 +5593,7 @@ body.is-member-app .bible-search-form {
 }
 
 body.is-member-app .bible-reader-form {
-  grid-template-columns: 0.8fr 1.3fr 0.7fr auto;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   align-items: end;
 }
 

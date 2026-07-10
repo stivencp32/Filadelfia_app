@@ -279,6 +279,7 @@ let memberBibleState = {
   verse: "",
   search: "",
   mode: "chapter",
+  readMode: "chapter",
   loading: false,
   result: null,
   error: "",
@@ -3104,7 +3105,7 @@ function currentBibleVerseNumber() {
 
 function currentBibleReferenceText() {
   const book = bibleBookByAbbrev();
-  return `${book.name} ${memberBibleState.chapter}`;
+  return `${book.name} ${memberBibleState.chapter}${memberBibleState.readMode === "verse" && memberBibleState.verse ? `:${memberBibleState.verse}` : ""}`;
 }
 
 function bibleAdjacentChapter(direction) {
@@ -3138,6 +3139,7 @@ function applyBibleReference(reference) {
     book: reference.book,
     chapter: reference.chapter,
     verse: "",
+    readMode: "chapter",
     search: "",
     result: null,
     error: ""
@@ -3253,18 +3255,22 @@ function renderBibleResult() {
     `;
   }
   if (result.verses) {
-    const reference = `${result.book?.name || bibleBookByAbbrev().name} ${result.chapter?.number || memberBibleState.chapter}`;
+    const singleVerseMode = memberBibleState.mode === "verse" || result.verses.length === 1;
+    const firstVerse = result.verses[0] || {};
+    const reference = `${result.book?.name || bibleBookByAbbrev().name} ${result.chapter?.number || memberBibleState.chapter}${singleVerseMode ? `:${firstVerse.number || memberBibleState.verse || 1}` : ""}`;
     return `
       <section class="bible-reader-surface">
         <header>
           <span>${escapeHtml(result.source === "bible-api" ? "ALMEIDA" : (result.book?.version || memberBibleState.version).toUpperCase())}</span>
           <strong>${escapeHtml(reference)}</strong>
         </header>
-        <div class="bible-chapter-text">
-          ${result.verses.map((verse) => `
-            <p><sup>${escapeHtml(verse.number)}</sup>${escapeHtml(verse.text || "")}</p>
-          `).join("")}
-        </div>
+        ${singleVerseMode ? `<p>${escapeHtml(firstVerse.text || "")}</p>` : `
+          <div class="bible-chapter-text">
+            ${result.verses.map((verse) => `
+              <p><sup>${escapeHtml(verse.number)}</sup>${escapeHtml(verse.text || "")}</p>
+            `).join("")}
+          </div>
+        `}
       </section>
       <div class="bible-reader-nav">
         <button class="outline" type="button" data-bible-chapter-step="-1"><i data-lucide="chevron-left"></i> Capítulo anterior</button>
@@ -3288,7 +3294,8 @@ function renderBibleResult() {
 }
 
 function renderMemberBibleView() {
-  const { version, book, chapter, search, controlsCollapsed } = memberBibleState;
+  const { version, book, chapter, verse, search, controlsCollapsed, readMode } = memberBibleState;
+  const readingVerse = readMode === "verse";
   return `
     <section class="member-bible-panel ${controlsCollapsed ? "is-reading-focused" : ""}">
       <div class="bible-reader-topbar">
@@ -3303,6 +3310,12 @@ function renderMemberBibleView() {
       </div>
       <div class="bible-controls" ${controlsCollapsed ? "hidden" : ""}>
         <form class="bible-reader-form" id="memberBibleReaderForm">
+        <label>Ler
+          <select name="readMode">
+            <option value="chapter" ${!readingVerse ? "selected" : ""}>Capítulo</option>
+            <option value="verse" ${readingVerse ? "selected" : ""}>Versículo</option>
+          </select>
+        </label>
         <label>Versão
           <select name="version">
             ${BIBLE_VERSIONS.map((item) => `<option value="${item.id}" ${item.id === version ? "selected" : ""}>${item.label}</option>`).join("")}
@@ -3316,6 +3329,9 @@ function renderMemberBibleView() {
         <label>Capítulo
           <select name="chapter">${bibleChapterOptionsHtml(book, chapter)}</select>
         </label>
+        ${readingVerse ? `<label>Versículo
+          <input name="verse" inputmode="numeric" pattern="[0-9]*" placeholder="1" value="${escapeHtml(verse || "1")}" />
+        </label>` : ""}
         <button class="save" type="submit"><i data-lucide="book-open-check"></i> Abrir</button>
         </form>
         <div class="bible-quick-actions">
@@ -3369,22 +3385,25 @@ async function loadBiblePassage({ random = false, search = "" } = {}) {
       memberBibleState.mode = "verse";
       try {
         memberBibleState.result = await requestBibleJson(`/verses/${encodeURIComponent(version)}/random`);
+        memberBibleState.readMode = "verse";
       } catch {
         const randomBook = BIBLE_BOOKS[Math.floor(Math.random() * BIBLE_BOOKS.length)];
         const randomChapter = Math.floor(Math.random() * randomBook.chapters) + 1;
-        memberBibleState = { ...memberBibleState, version: "almeida", book: randomBook.abbrev, chapter: randomChapter, verse: "", mode: "chapter" };
+        memberBibleState = { ...memberBibleState, version: "almeida", book: randomBook.abbrev, chapter: randomChapter, verse: "", mode: "chapter", readMode: "chapter" };
         memberBibleState.result = await requestBibleApiReference(bibleApiReference());
       }
     } else {
-      memberBibleState.verse = "";
-      memberBibleState.mode = "chapter";
+      const readMode = memberBibleState.readMode === "verse" ? "verse" : "chapter";
+      const verse = readMode === "verse" ? (String(memberBibleState.verse || "1").replace(/\D/g, "") || "1") : "";
+      memberBibleState.verse = verse;
+      memberBibleState.mode = readMode;
       if (version === "almeida") {
         memberBibleState.result = await requestBibleApiReference(bibleApiReference());
       } else {
         const book = encodeURIComponent(memberBibleState.book);
         const chapter = encodeURIComponent(memberBibleState.chapter);
         try {
-          memberBibleState.result = await requestBibleJson(`/verses/${encodeURIComponent(version)}/${book}/${chapter}`);
+          memberBibleState.result = await requestBibleJson(`/verses/${encodeURIComponent(version)}/${book}/${chapter}${verse ? `/${encodeURIComponent(verse)}` : ""}`);
         } catch {
           memberBibleState.version = "almeida";
           memberBibleState.result = await requestBibleApiReference(bibleApiReference());
@@ -5463,16 +5482,22 @@ document.querySelector("#memberForm")?.addEventListener("input", (event) => {
 
 document.addEventListener("change", (event) => {
   if (!event.target.closest("#memberBibleReaderForm")) return;
+  if (event.target.name === "verse") {
+    memberBibleState.verse = String(event.target.value || "1").replace(/\D/g, "") || "1";
+    return;
+  }
   const form = event.target.form;
   if (!form) return;
   const data = formData(form);
   const book = bibleBookByAbbrev(data.book);
+  const readMode = data.readMode === "verse" ? "verse" : "chapter";
   memberBibleState = {
     ...memberBibleState,
     version: data.version || memberBibleState.version,
     book: book.abbrev,
     chapter: Math.min(Math.max(Number(data.chapter || 1), 1), book.chapters),
-    verse: ""
+    readMode,
+    verse: readMode === "verse" ? (String(data.verse || memberBibleState.verse || "1").replace(/\D/g, "") || "1") : ""
   };
   renderMemberLiveView();
 });
@@ -5525,12 +5550,14 @@ document.addEventListener("submit", async (event) => {
     event.preventDefault();
     const data = formData(event.target);
     const book = bibleBookByAbbrev(data.book);
+    const readMode = data.readMode === "verse" ? "verse" : "chapter";
     memberBibleState = {
       ...memberBibleState,
       version: data.version || "nvi",
       book: book.abbrev,
       chapter: Math.min(Math.max(Number(data.chapter || 1), 1), book.chapters),
-      verse: "",
+      readMode,
+      verse: readMode === "verse" ? (String(data.verse || "1").replace(/\D/g, "") || "1") : "",
       search: ""
     };
     await loadBiblePassage();
