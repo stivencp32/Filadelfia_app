@@ -5593,7 +5593,7 @@ body.is-member-app .bible-search-form {
 }
 
 body.is-member-app .bible-reader-form {
-  grid-template-columns: 0.8fr 1.2fr 0.7fr 0.7fr auto;
+  grid-template-columns: 0.8fr 1.3fr 0.7fr auto;
   align-items: end;
 }
 
@@ -5711,7 +5711,15 @@ body.is-member-app .bible-featured-verse {
   gap: 8px;
 }
 
+body.is-member-app .bible-reader-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 body.is-member-app .bible-current-bar {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -5732,6 +5740,24 @@ body.is-member-app .bible-current-bar span {
 body.is-member-app .bible-current-bar strong {
   color: #111827;
   font-size: 18px;
+}
+
+body.is-member-app #toggleBibleControlsButton {
+  min-height: 48px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+body.is-member-app .bible-controls {
+  display: grid;
+  gap: 12px;
+}
+
+body.is-member-app .bible-controls[hidden] {
+  display: none;
 }
 
 body.is-member-app .bible-quick-actions,
@@ -5756,7 +5782,7 @@ body.is-member-app .bible-reader-nav button {
 
 body.is-member-app .bible-reader-surface {
   display: grid;
-  gap: 18px;
+  gap: 20px;
   border: 1px solid #e1e6ee;
   border-radius: 14px;
   padding: clamp(22px, 4vw, 34px);
@@ -5785,8 +5811,35 @@ body.is-member-app .bible-reader-surface p {
   margin: 0;
   color: #1f2937;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(24px, 4vw, 34px);
-  line-height: 1.55;
+  font-size: clamp(20px, 2.6vw, 26px);
+  line-height: 1.75;
+}
+
+body.is-member-app .bible-chapter-text {
+  display: grid;
+  gap: 12px;
+}
+
+body.is-member-app .bible-chapter-text p {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+}
+
+body.is-member-app .bible-chapter-text sup {
+  color: var(--orange);
+  font-family: var(--font, system-ui);
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 2;
+}
+
+body.is-member-app .member-bible-panel.is-reading-focused {
+  padding-top: 12px;
+}
+
+body.is-member-app .member-bible-panel.is-reading-focused .bible-reader-surface {
+  padding-block: clamp(26px, 5vw, 44px);
 }
 
 body.is-member-app .bible-loading svg {
@@ -5939,6 +5992,15 @@ body.is-member-app .member-profile-form label {
   body.is-member-app .bible-current-bar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  body.is-member-app .bible-reader-topbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  body.is-member-app #toggleBibleControlsButton {
+    width: 100%;
   }
 
   body.is-member-app .bible-quick-actions {

@@ -276,12 +276,13 @@ let memberBibleState = {
   version: "almeida",
   book: "sl",
   chapter: 23,
-  verse: "1",
+  verse: "",
   search: "",
   mode: "chapter",
   loading: false,
   result: null,
-  error: ""
+  error: "",
+  controlsCollapsed: false
 };
 let usersPage = 1;
 let membersPage = 1;
@@ -3103,42 +3104,31 @@ function currentBibleVerseNumber() {
 
 function currentBibleReferenceText() {
   const book = bibleBookByAbbrev();
-  return `${book.name} ${memberBibleState.chapter}:${currentBibleVerseNumber()}`;
+  return `${book.name} ${memberBibleState.chapter}`;
 }
 
-function bibleAdjacentReference(direction) {
+function bibleAdjacentChapter(direction) {
   const bookIndex = bibleBookIndex();
   const book = BIBLE_BOOKS[bookIndex];
   let nextBook = book;
   let nextChapter = Number(memberBibleState.chapter || 1);
-  let nextVerse = currentBibleVerseNumber() + direction;
-  const loadedVerses = memberBibleState.result?.verses || [];
-  const maxLoadedVerse = loadedVerses.reduce((max, item) => Math.max(max, Number(item.number || 0)), 0);
-  const chapterVerseLimit = maxLoadedVerse > 1 ? maxLoadedVerse : 176;
+  nextChapter += direction;
 
-  if (nextVerse < 1) {
-    nextChapter -= 1;
-    if (nextChapter < 1) {
-      const previousBook = BIBLE_BOOKS[bookIndex - 1];
-      if (!previousBook) return null;
-      nextBook = previousBook;
-      nextChapter = previousBook.chapters;
-    }
-    nextVerse = 1;
+  if (nextChapter < 1) {
+    const previousBook = BIBLE_BOOKS[bookIndex - 1];
+    if (!previousBook) return null;
+    nextBook = previousBook;
+    nextChapter = previousBook.chapters;
   }
 
-  if (nextVerse > chapterVerseLimit) {
-    nextVerse = 1;
-    nextChapter += 1;
-    if (nextChapter > nextBook.chapters) {
-      const followingBook = BIBLE_BOOKS[bookIndex + 1];
-      if (!followingBook) return null;
-      nextBook = followingBook;
-      nextChapter = 1;
-    }
+  if (nextChapter > nextBook.chapters) {
+    const followingBook = BIBLE_BOOKS[bookIndex + 1];
+    if (!followingBook) return null;
+    nextBook = followingBook;
+    nextChapter = 1;
   }
 
-  return { book: nextBook.abbrev, chapter: nextChapter, verse: String(nextVerse) };
+  return { book: nextBook.abbrev, chapter: nextChapter };
 }
 
 function applyBibleReference(reference) {
@@ -3147,7 +3137,7 @@ function applyBibleReference(reference) {
     ...memberBibleState,
     book: reference.book,
     chapter: reference.chapter,
-    verse: reference.verse,
+    verse: "",
     search: "",
     result: null,
     error: ""
@@ -3243,7 +3233,7 @@ function renderBibleResult() {
     `;
   }
   if (!result) {
-    return `<div class="member-live-empty"><i data-lucide="book-open"></i><strong>Escolha uma leitura</strong><span>Selecione livro, capítulo e versículo para abrir a leitura.</span></div>`;
+    return `<div class="member-live-empty"><i data-lucide="book-open"></i><strong>Escolha uma leitura</strong><span>Selecione livro e capítulo para abrir a leitura.</span></div>`;
   }
   if (mode === "search") {
     const verses = result.verses || [];
@@ -3263,19 +3253,22 @@ function renderBibleResult() {
     `;
   }
   if (result.verses) {
-    const currentVerse = result.verses[0] || {};
-    const reference = `${result.book?.name || bibleBookByAbbrev().name} ${result.chapter?.number || memberBibleState.chapter}:${currentVerse.number || currentBibleVerseNumber()}`;
+    const reference = `${result.book?.name || bibleBookByAbbrev().name} ${result.chapter?.number || memberBibleState.chapter}`;
     return `
       <section class="bible-reader-surface">
         <header>
           <span>${escapeHtml(result.source === "bible-api" ? "ALMEIDA" : (result.book?.version || memberBibleState.version).toUpperCase())}</span>
           <strong>${escapeHtml(reference)}</strong>
         </header>
-        <p>${escapeHtml(currentVerse.text || "")}</p>
+        <div class="bible-chapter-text">
+          ${result.verses.map((verse) => `
+            <p><sup>${escapeHtml(verse.number)}</sup>${escapeHtml(verse.text || "")}</p>
+          `).join("")}
+        </div>
       </section>
       <div class="bible-reader-nav">
-        <button class="outline" type="button" data-bible-step="-1"><i data-lucide="chevron-left"></i> Anterior</button>
-        <button class="outline" type="button" data-bible-step="1">Próximo <i data-lucide="chevron-right"></i></button>
+        <button class="outline" type="button" data-bible-chapter-step="-1"><i data-lucide="chevron-left"></i> Capítulo anterior</button>
+        <button class="outline" type="button" data-bible-chapter-step="1">Próximo capítulo <i data-lucide="chevron-right"></i></button>
       </div>
     `;
   }
@@ -3288,21 +3281,28 @@ function renderBibleResult() {
       <p>${escapeHtml(result.text || "")}</p>
     </section>
     <div class="bible-reader-nav">
-      <button class="outline" type="button" data-bible-step="-1"><i data-lucide="chevron-left"></i> Anterior</button>
-      <button class="outline" type="button" data-bible-step="1">Próximo <i data-lucide="chevron-right"></i></button>
+      <button class="outline" type="button" data-bible-chapter-step="-1"><i data-lucide="chevron-left"></i> Capítulo anterior</button>
+      <button class="outline" type="button" data-bible-chapter-step="1">Próximo capítulo <i data-lucide="chevron-right"></i></button>
     </div>
   `;
 }
 
 function renderMemberBibleView() {
-  const { version, book, chapter, verse, search } = memberBibleState;
+  const { version, book, chapter, search, controlsCollapsed } = memberBibleState;
   return `
-    <section class="member-bible-panel">
-      <div class="bible-current-bar">
-        <span>Leitura atual</span>
-        <strong>${escapeHtml(resultReferenceForBibleView())}</strong>
+    <section class="member-bible-panel ${controlsCollapsed ? "is-reading-focused" : ""}">
+      <div class="bible-reader-topbar">
+        <div class="bible-current-bar">
+          <span>Capítulo</span>
+          <strong>${escapeHtml(resultReferenceForBibleView())}</strong>
+        </div>
+        <button class="outline" type="button" id="toggleBibleControlsButton">
+          <i data-lucide="${controlsCollapsed ? "sliders-horizontal" : "minimize-2"}"></i>
+          ${controlsCollapsed ? "Mostrar controles" : "Recolher controles"}
+        </button>
       </div>
-      <form class="bible-reader-form" id="memberBibleReaderForm">
+      <div class="bible-controls" ${controlsCollapsed ? "hidden" : ""}>
+        <form class="bible-reader-form" id="memberBibleReaderForm">
         <label>Versão
           <select name="version">
             ${BIBLE_VERSIONS.map((item) => `<option value="${item.id}" ${item.id === version ? "selected" : ""}>${item.label}</option>`).join("")}
@@ -3316,23 +3316,21 @@ function renderMemberBibleView() {
         <label>Capítulo
           <select name="chapter">${bibleChapterOptionsHtml(book, chapter)}</select>
         </label>
-        <label>Versículo
-          <input name="verse" inputmode="numeric" pattern="[0-9]*" placeholder="1" value="${escapeHtml(verse || "1")}" />
-        </label>
         <button class="save" type="submit"><i data-lucide="book-open-check"></i> Abrir</button>
-      </form>
-      <div class="bible-quick-actions">
-        <button class="outline" type="button" id="memberBibleRandomButton"><i data-lucide="shuffle"></i> Aleatório</button>
-        <button class="outline" type="button" data-bible-step="-1"><i data-lucide="chevron-left"></i> Anterior</button>
-        <button class="outline" type="button" data-bible-step="1">Próximo <i data-lucide="chevron-right"></i></button>
+        </form>
+        <div class="bible-quick-actions">
+          <button class="outline" type="button" id="memberBibleRandomButton"><i data-lucide="shuffle"></i> Aleatório</button>
+          <button class="outline" type="button" data-bible-chapter-step="-1"><i data-lucide="chevron-left"></i> Capítulo anterior</button>
+          <button class="outline" type="button" data-bible-chapter-step="1">Próximo capítulo <i data-lucide="chevron-right"></i></button>
+        </div>
+        <form class="bible-search-form" id="memberBibleSearchForm">
+          <label>Buscar palavra
+            <input name="search" placeholder="Ex.: amor, fé, esperança" value="${escapeHtml(search)}" />
+          </label>
+          <button class="outline" type="submit"><i data-lucide="search"></i> Buscar</button>
+        </form>
+        <small class="bible-api-note">Almeida usa Bible-API.com sem autenticação. Busca por palavra usa A Bíblia Digital.</small>
       </div>
-      <form class="bible-search-form" id="memberBibleSearchForm">
-        <label>Buscar palavra
-          <input name="search" placeholder="Ex.: amor, fé, esperança" value="${escapeHtml(search)}" />
-        </label>
-        <button class="outline" type="submit"><i data-lucide="search"></i> Buscar</button>
-      </form>
-      <small class="bible-api-note">Almeida usa Bible-API.com sem autenticação. Busca por palavra usa A Bíblia Digital.</small>
       <div class="bible-result">${renderBibleResult()}</div>
     </section>
   `;
@@ -3378,15 +3376,15 @@ async function loadBiblePassage({ random = false, search = "" } = {}) {
         memberBibleState.result = await requestBibleApiReference(bibleApiReference());
       }
     } else {
-      const verse = String(memberBibleState.verse || "").trim();
-      memberBibleState.mode = verse ? "verse" : "chapter";
+      memberBibleState.verse = "";
+      memberBibleState.mode = "chapter";
       if (version === "almeida") {
         memberBibleState.result = await requestBibleApiReference(bibleApiReference());
       } else {
         const book = encodeURIComponent(memberBibleState.book);
         const chapter = encodeURIComponent(memberBibleState.chapter);
         try {
-          memberBibleState.result = await requestBibleJson(`/verses/${encodeURIComponent(version)}/${book}/${chapter}${verse ? `/${encodeURIComponent(verse)}` : ""}`);
+          memberBibleState.result = await requestBibleJson(`/verses/${encodeURIComponent(version)}/${book}/${chapter}`);
         } catch {
           memberBibleState.version = "almeida";
           memberBibleState.result = await requestBibleApiReference(bibleApiReference());
@@ -5474,7 +5472,7 @@ document.addEventListener("change", (event) => {
     version: data.version || memberBibleState.version,
     book: book.abbrev,
     chapter: Math.min(Math.max(Number(data.chapter || 1), 1), book.chapters),
-    verse: String(data.verse || "1").replace(/\D/g, "") || "1"
+    verse: ""
   };
   renderMemberLiveView();
 });
@@ -5532,7 +5530,7 @@ document.addEventListener("submit", async (event) => {
       version: data.version || "nvi",
       book: book.abbrev,
       chapter: Math.min(Math.max(Number(data.chapter || 1), 1), book.chapters),
-      verse: String(data.verse || "1").replace(/\D/g, "") || "1",
+      verse: "",
       search: ""
     };
     await loadBiblePassage();
@@ -5798,9 +5796,13 @@ document.addEventListener("click", (event) => {
   if (event.target.closest("#memberLogoutButton")) signOutEverywhere();
   if (event.target.closest("#memberBibleRetryButton")) loadBiblePassage();
   if (event.target.closest("#memberBibleRandomButton")) loadBiblePassage({ random: true });
-  const bibleStepButton = event.target.closest("[data-bible-step]");
-  if (bibleStepButton && document.body.classList.contains("is-member-app")) {
-    applyBibleReference(bibleAdjacentReference(Number(bibleStepButton.dataset.bibleStep || 1)));
+  if (event.target.closest("#toggleBibleControlsButton")) {
+    memberBibleState.controlsCollapsed = !memberBibleState.controlsCollapsed;
+    renderMemberLiveView();
+  }
+  const bibleChapterStepButton = event.target.closest("[data-bible-chapter-step]");
+  if (bibleChapterStepButton && document.body.classList.contains("is-member-app")) {
+    applyBibleReference(bibleAdjacentChapter(Number(bibleChapterStepButton.dataset.bibleChapterStep || 1)));
   }
   if (event.target.closest("#printMemberCardButton")) window.print();
 
