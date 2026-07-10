@@ -5582,18 +5582,19 @@ body.is-member-app .member-live-pix {
 
 body.is-member-app .member-bible-panel {
   display: grid;
-  gap: 14px;
-  padding: 18px;
+  gap: 12px;
+  padding: 16px;
 }
 
 body.is-member-app .bible-reader-form,
 body.is-member-app .bible-search-form {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 body.is-member-app .bible-reader-form {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: 0.8fr 1.2fr 0.7fr 0.7fr auto;
+  align-items: end;
 }
 
 body.is-member-app .bible-search-form {
@@ -5632,7 +5633,8 @@ body.is-member-app .bible-search-form button {
 }
 
 body.is-member-app .bible-reader-form button {
-  grid-column: span 2;
+  grid-column: auto;
+  min-width: 124px;
 }
 
 body.is-member-app .bible-api-note {
@@ -5707,6 +5709,84 @@ body.is-member-app .bible-featured-verse p {
 body.is-member-app .bible-featured-verse {
   display: grid;
   gap: 8px;
+}
+
+body.is-member-app .bible-current-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #e1e6ee;
+  border-radius: 12px;
+  padding: 13px 15px;
+  background: #f8fafc;
+}
+
+body.is-member-app .bible-current-bar span {
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+body.is-member-app .bible-current-bar strong {
+  color: #111827;
+  font-size: 18px;
+}
+
+body.is-member-app .bible-quick-actions,
+body.is-member-app .bible-reader-nav {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+body.is-member-app .bible-reader-nav {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+body.is-member-app .bible-quick-actions button,
+body.is-member-app .bible-reader-nav button {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+body.is-member-app .bible-reader-surface {
+  display: grid;
+  gap: 18px;
+  border: 1px solid #e1e6ee;
+  border-radius: 14px;
+  padding: clamp(22px, 4vw, 34px);
+  background: linear-gradient(180deg, #ffffff, #fbfcff);
+}
+
+body.is-member-app .bible-reader-surface header {
+  display: grid;
+  gap: 4px;
+}
+
+body.is-member-app .bible-reader-surface header span {
+  color: var(--orange);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+body.is-member-app .bible-reader-surface header strong {
+  color: #111827;
+  font-size: clamp(26px, 4vw, 42px);
+  line-height: 1.05;
+}
+
+body.is-member-app .bible-reader-surface p {
+  margin: 0;
+  color: #1f2937;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(24px, 4vw, 34px);
+  line-height: 1.55;
 }
 
 body.is-member-app .bible-loading svg {
@@ -5854,6 +5934,19 @@ body.is-member-app .member-profile-form label {
 
   body.is-member-app .bible-reader-form button {
     grid-column: auto;
+  }
+
+  body.is-member-app .bible-current-bar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  body.is-member-app .bible-quick-actions {
+    grid-template-columns: 1fr;
+  }
+
+  body.is-member-app .bible-reader-surface {
+    padding: 22px;
   }
 
   body.is-member-app .bible-result-heading {

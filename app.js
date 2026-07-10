@@ -276,7 +276,7 @@ let memberBibleState = {
   version: "almeida",
   book: "sl",
   chapter: 23,
-  verse: "",
+  verse: "1",
   search: "",
   mode: "chapter",
   loading: false,
@@ -3091,6 +3091,70 @@ function bibleReferenceLabel(item) {
   return [bookName, chapter && number ? `${chapter}:${number}` : chapter].filter(Boolean).join(" ");
 }
 
+function bibleBookIndex(abbrev = memberBibleState.book) {
+  return Math.max(0, BIBLE_BOOKS.findIndex((book) => book.abbrev === abbrev));
+}
+
+function currentBibleVerseNumber() {
+  const explicit = Number(String(memberBibleState.verse || "").replace(/\D/g, ""));
+  const firstLoaded = Number(memberBibleState.result?.verses?.[0]?.number || memberBibleState.result?.number || 1);
+  return Number.isFinite(explicit) && explicit > 0 ? explicit : firstLoaded || 1;
+}
+
+function currentBibleReferenceText() {
+  const book = bibleBookByAbbrev();
+  return `${book.name} ${memberBibleState.chapter}:${currentBibleVerseNumber()}`;
+}
+
+function bibleAdjacentReference(direction) {
+  const bookIndex = bibleBookIndex();
+  const book = BIBLE_BOOKS[bookIndex];
+  let nextBook = book;
+  let nextChapter = Number(memberBibleState.chapter || 1);
+  let nextVerse = currentBibleVerseNumber() + direction;
+  const loadedVerses = memberBibleState.result?.verses || [];
+  const maxLoadedVerse = loadedVerses.reduce((max, item) => Math.max(max, Number(item.number || 0)), 0);
+  const chapterVerseLimit = maxLoadedVerse > 1 ? maxLoadedVerse : 176;
+
+  if (nextVerse < 1) {
+    nextChapter -= 1;
+    if (nextChapter < 1) {
+      const previousBook = BIBLE_BOOKS[bookIndex - 1];
+      if (!previousBook) return null;
+      nextBook = previousBook;
+      nextChapter = previousBook.chapters;
+    }
+    nextVerse = 1;
+  }
+
+  if (nextVerse > chapterVerseLimit) {
+    nextVerse = 1;
+    nextChapter += 1;
+    if (nextChapter > nextBook.chapters) {
+      const followingBook = BIBLE_BOOKS[bookIndex + 1];
+      if (!followingBook) return null;
+      nextBook = followingBook;
+      nextChapter = 1;
+    }
+  }
+
+  return { book: nextBook.abbrev, chapter: nextChapter, verse: String(nextVerse) };
+}
+
+function applyBibleReference(reference) {
+  if (!reference) return;
+  memberBibleState = {
+    ...memberBibleState,
+    book: reference.book,
+    chapter: reference.chapter,
+    verse: reference.verse,
+    search: "",
+    result: null,
+    error: ""
+  };
+  loadBiblePassage();
+}
+
 function bibleRequestHeaders() {
   return {
     Accept: "application/json"
@@ -3166,7 +3230,7 @@ function friendlyBibleError(data) {
 function renderBibleResult() {
   const { result, loading, error, mode } = memberBibleState;
   if (loading) {
-    return `<div class="member-live-empty bible-loading"><i data-lucide="loader-circle"></i><strong>Carregando Bíblia</strong><span>Consultando A Bíblia Digital...</span></div>`;
+    return `<div class="member-live-empty bible-loading"><i data-lucide="loader-circle"></i><strong>Carregando Bíblia</strong><span>Preparando sua leitura...</span></div>`;
   }
   if (error) {
     return `
@@ -3179,7 +3243,7 @@ function renderBibleResult() {
     `;
   }
   if (!result) {
-    return `<div class="member-live-empty"><i data-lucide="book-open"></i><strong>Escolha uma leitura</strong><span>Selecione livro e capítulo, busque uma palavra ou receba um versículo aleatório.</span></div>`;
+    return `<div class="member-live-empty"><i data-lucide="book-open"></i><strong>Escolha uma leitura</strong><span>Selecione livro, capítulo e versículo para abrir a leitura.</span></div>`;
   }
   if (mode === "search") {
     const verses = result.verses || [];
@@ -3199,27 +3263,34 @@ function renderBibleResult() {
     `;
   }
   if (result.verses) {
+    const currentVerse = result.verses[0] || {};
+    const reference = `${result.book?.name || bibleBookByAbbrev().name} ${result.chapter?.number || memberBibleState.chapter}:${currentVerse.number || currentBibleVerseNumber()}`;
     return `
-      <section class="bible-result-heading">
-        <strong>${escapeHtml(`${result.book?.name || bibleBookByAbbrev().name} ${result.chapter?.number || memberBibleState.chapter}`)}</strong>
-        <span>${escapeHtml(result.source === "bible-api" ? "ALMEIDA" : (result.book?.version || memberBibleState.version).toUpperCase())}</span>
+      <section class="bible-reader-surface">
+        <header>
+          <span>${escapeHtml(result.source === "bible-api" ? "ALMEIDA" : (result.book?.version || memberBibleState.version).toUpperCase())}</span>
+          <strong>${escapeHtml(reference)}</strong>
+        </header>
+        <p>${escapeHtml(currentVerse.text || "")}</p>
       </section>
-      <div class="bible-verse-list">
-        ${result.verses.map((verse) => `
-          <article class="bible-verse-line">
-            <sup>${escapeHtml(verse.number)}</sup>
-            <p>${escapeHtml(verse.text || "")}</p>
-          </article>
-        `).join("")}
+      <div class="bible-reader-nav">
+        <button class="outline" type="button" data-bible-step="-1"><i data-lucide="chevron-left"></i> Anterior</button>
+        <button class="outline" type="button" data-bible-step="1">Próximo <i data-lucide="chevron-right"></i></button>
       </div>
     `;
   }
   return `
-    <section class="bible-featured-verse">
-      <span>${escapeHtml((result.book?.version || memberBibleState.version).toUpperCase())}</span>
-      <strong>${escapeHtml(bibleReferenceLabel(result))}</strong>
+    <section class="bible-reader-surface">
+      <header>
+        <span>${escapeHtml((result.book?.version || memberBibleState.version).toUpperCase())}</span>
+        <strong>${escapeHtml(bibleReferenceLabel(result))}</strong>
+      </header>
       <p>${escapeHtml(result.text || "")}</p>
     </section>
+    <div class="bible-reader-nav">
+      <button class="outline" type="button" data-bible-step="-1"><i data-lucide="chevron-left"></i> Anterior</button>
+      <button class="outline" type="button" data-bible-step="1">Próximo <i data-lucide="chevron-right"></i></button>
+    </div>
   `;
 }
 
@@ -3227,6 +3298,10 @@ function renderMemberBibleView() {
   const { version, book, chapter, verse, search } = memberBibleState;
   return `
     <section class="member-bible-panel">
+      <div class="bible-current-bar">
+        <span>Leitura atual</span>
+        <strong>${escapeHtml(resultReferenceForBibleView())}</strong>
+      </div>
       <form class="bible-reader-form" id="memberBibleReaderForm">
         <label>Versão
           <select name="version">
@@ -3242,11 +3317,15 @@ function renderMemberBibleView() {
           <select name="chapter">${bibleChapterOptionsHtml(book, chapter)}</select>
         </label>
         <label>Versículo
-          <input name="verse" inputmode="numeric" pattern="[0-9]*" placeholder="Todos" value="${escapeHtml(verse)}" />
+          <input name="verse" inputmode="numeric" pattern="[0-9]*" placeholder="1" value="${escapeHtml(verse || "1")}" />
         </label>
-        <button class="save" type="submit"><i data-lucide="book-open-check"></i> Ler</button>
-        <button class="outline" type="button" id="memberBibleRandomButton"><i data-lucide="shuffle"></i> Aleatório</button>
+        <button class="save" type="submit"><i data-lucide="book-open-check"></i> Abrir</button>
       </form>
+      <div class="bible-quick-actions">
+        <button class="outline" type="button" id="memberBibleRandomButton"><i data-lucide="shuffle"></i> Aleatório</button>
+        <button class="outline" type="button" data-bible-step="-1"><i data-lucide="chevron-left"></i> Anterior</button>
+        <button class="outline" type="button" data-bible-step="1">Próximo <i data-lucide="chevron-right"></i></button>
+      </div>
       <form class="bible-search-form" id="memberBibleSearchForm">
         <label>Buscar palavra
           <input name="search" placeholder="Ex.: amor, fé, esperança" value="${escapeHtml(search)}" />
@@ -3257,6 +3336,11 @@ function renderMemberBibleView() {
       <div class="bible-result">${renderBibleResult()}</div>
     </section>
   `;
+}
+
+function resultReferenceForBibleView() {
+  if (memberBibleState.mode === "search") return "Resultados de busca";
+  return currentBibleReferenceText();
 }
 
 async function loadBiblePassage({ random = false, search = "" } = {}) {
@@ -5390,7 +5474,7 @@ document.addEventListener("change", (event) => {
     version: data.version || memberBibleState.version,
     book: book.abbrev,
     chapter: Math.min(Math.max(Number(data.chapter || 1), 1), book.chapters),
-    verse: String(data.verse || "").replace(/\D/g, "")
+    verse: String(data.verse || "1").replace(/\D/g, "") || "1"
   };
   renderMemberLiveView();
 });
@@ -5448,7 +5532,7 @@ document.addEventListener("submit", async (event) => {
       version: data.version || "nvi",
       book: book.abbrev,
       chapter: Math.min(Math.max(Number(data.chapter || 1), 1), book.chapters),
-      verse: String(data.verse || "").replace(/\D/g, ""),
+      verse: String(data.verse || "1").replace(/\D/g, "") || "1",
       search: ""
     };
     await loadBiblePassage();
@@ -5714,6 +5798,10 @@ document.addEventListener("click", (event) => {
   if (event.target.closest("#memberLogoutButton")) signOutEverywhere();
   if (event.target.closest("#memberBibleRetryButton")) loadBiblePassage();
   if (event.target.closest("#memberBibleRandomButton")) loadBiblePassage({ random: true });
+  const bibleStepButton = event.target.closest("[data-bible-step]");
+  if (bibleStepButton && document.body.classList.contains("is-member-app")) {
+    applyBibleReference(bibleAdjacentReference(Number(bibleStepButton.dataset.bibleStep || 1)));
+  }
   if (event.target.closest("#printMemberCardButton")) window.print();
 
   const detailEvent = event.target.closest("[data-detail-event]");
