@@ -5604,7 +5604,6 @@ document.addEventListener("click", (event) => {
     memberAppView = memberAppButton.dataset.memberAppView || "home";
     renderMemberLiveView();
     if (memberAppView === "bible" && !memberBibleState.result && !memberBibleState.loading) loadBiblePassage();
-    document.querySelector(".member-live-content-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   if (event.target.closest("#openMemberFormButton") && canManage("members")) {
